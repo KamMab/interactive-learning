@@ -4,6 +4,7 @@ import { recordResult } from "@/lib/progress";
 import { store } from "@/lib/store";
 import { shuffle } from "@/lib/id";
 import Results from "./Results";
+import Pic from "../Pic";
 import type { GP } from "./GameHost";
 
 const take = <T,>(arr: T[], n?: number) => (n && n > 0 ? arr.slice(0, n) : arr);
@@ -11,9 +12,9 @@ const take = <T,>(arr: T[], n?: number) => (n && n > 0 ? arr.slice(0, n) : arr);
 export default function Match({ chapter, opts, onBack }: GP) {
   const { content } = chapter;
   const [round, setRound] = useState(0);
-  type Tile = { key: string; pairId: string; text: string; side: "term" | "def" };
+  type Tile = { key: string; pairId: string; text: string; side: "term" | "def"; image?: string };
   const tiles = useMemo(() => shuffle<Tile>(shuffle(content.terms).slice(0, Math.max(2, opts.pairs ?? 6)).flatMap(p => [
-    { key: p.id + "t", pairId: p.id, text: p.term, side: "term" }, { key: p.id + "d", pairId: p.id, text: p.definition, side: "def" }])), [round]);
+    { key: p.id + "t", pairId: p.id, text: p.term, side: "term" }, { key: p.id + "d", pairId: p.id, text: p.definition, side: "def", image: p.image }])), [round]);
   const [sel, setSel] = useState<Tile | null>(null), [matched, setMatched] = useState<Set<string>>(new Set()), [wrong, setWrong] = useState<string[]>([]), [misses, setMisses] = useState(0), [elapsed, setElapsed] = useState(0), [done, setDone] = useState(false);
   const start = useRef(Date.now());
   const pairs = tiles.length / 2;
@@ -40,7 +41,7 @@ export default function Match({ chapter, opts, onBack }: GP) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {tiles.map(t => {
           const m = matched.has(t.pairId), s = sel && sel.key === t.key, w = wrong.includes(t.key);
-          return <button key={t.key} onClick={() => click(t)} disabled={m} className={`mtile${t.side === "term" ? " term" : ""}${m ? " gone" : w ? " bad shake" : s ? " sel" : ""}`}>{t.text}</button>;
+          return <button key={t.key} onClick={() => click(t)} disabled={m} className={`mtile${t.side === "term" ? " term" : ""}${m ? " gone" : w ? " bad shake" : s ? " sel" : ""}`}>{t.image ? <Pic src={t.image} alt="Picture to match" className="m-pic" /> : t.text}</button>;
         })}
       </div>
     </div>);

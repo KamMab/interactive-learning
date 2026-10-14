@@ -7,6 +7,16 @@ export async function proxy(req: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (process.env.NEXT_PUBLIC_ENABLE_AUTH !== "true" || !url || !key) return NextResponse.next();
 
+  // If Supabase sends an email link to the wrong page (e.g. the home page because the redirect
+  // address wasn't on its allow list), finish the sign-in here instead of silently dropping it.
+  const { pathname, searchParams } = req.nextUrl;
+  if (pathname !== "/auth/callback" && (searchParams.has("code") || searchParams.has("error_description"))) {
+    const to = new URL("/auth/callback", req.url);
+    searchParams.forEach((v, k) => to.searchParams.set(k, v));
+    if (!to.searchParams.has("next")) to.searchParams.set("next", pathname);
+    return NextResponse.redirect(to);
+  }
+
   let res = NextResponse.next({ request: req });
   const sb = createServerClient(url, key, {
     cookies: {

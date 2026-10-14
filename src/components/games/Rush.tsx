@@ -4,8 +4,9 @@ import { recordResult } from "@/lib/progress";
 import { store } from "@/lib/store";
 import { shuffle } from "@/lib/id";
 import Results from "./Results";
+import Pic from "../Pic";
 import type { GP } from "./GameHost";
-import type { Question } from "@/lib/types";
+import { modeName, type Question } from "@/lib/types";
 
 const take = <T,>(arr: T[], n?: number) => (n && n > 0 ? arr.slice(0, n) : arr);
 
@@ -30,7 +31,7 @@ export default function Rush({ chapter, opts, onBack }: GP) {
       <p className="mt-3 text-muted">Answer as many as you can. Questions repeat if you run out.</p>
       <button className="btn big mt-5" onClick={begin}>Start</button>
     </div>);
-  if (phase === "done") return <Results title="Ledger Rush" score={score} total={answered} extra={{ value: limit + "s", label: "Round" }} onBack={onBack} onReplay={begin} />;
+  if (phase === "done") return <Results title={modeName("rush", chapter.content)} score={score} total={answered} extra={{ value: limit + "s", label: "Round" }} onBack={onBack} onReplay={begin} />;
   const q = queue[0];
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-3">
@@ -41,6 +42,7 @@ export default function Rush({ chapter, opts, onBack }: GP) {
       </div>
       <div className="timer"><i style={{ width: `${(left / limit) * 100}%` }} /></div>
       <div className={`sheet${flash === "bad" ? " shake" : ""}`} style={flash ? { borderColor: flash === "ok" ? "var(--good)" : "var(--red)" } : undefined}>
+        {q.image && <Pic src={q.image} alt="Picture for this question" className="q-pic mb-3" />}
         <p className="mb-4 text-[clamp(18px,3.2vw,22px)] font-bold leading-snug">{q.prompt}</p>
         <div className="grid gap-3 sm:grid-cols-2">{q.choices.map((c, idx) => <button key={idx} onClick={() => pick(idx)} className="opt"><span className="ob">{String.fromCharCode(65 + idx)}</span><span className="min-w-0 flex-1">{c}</span></button>)}</div>
       </div>

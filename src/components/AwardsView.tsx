@@ -21,7 +21,7 @@ function compute(): Badge[] {
     { id: "chapter", icon: "📗", name: "Chapter master", how: "Master every item in a chapter.", have: Math.min(fullChapters, 1), need: 1 },
     { id: "perfect", icon: "💯", name: "Perfect quiz", how: "Get every Quick-fire question right.", have: best("quiz", (b) => b.best === b.total) ? 1 : 0, need: 1 },
     { id: "ledger", icon: "📒", name: "Balanced books", how: "Get every journal entry right in a round.", have: best("entries", (b) => b.best === b.total) ? 1 : 0, need: 1 },
-    { id: "rush", icon: "⚡", name: "Ledger Rusher", how: "Score 10+ in one Ledger Rush round.", have: Math.min(Math.max(0, ...chs.map((c) => c.modes.rush?.best ?? 0)), 10), need: 10 },
+    { id: "rush", icon: "⚡", name: "Rusher", how: "Score 10+ in one Rush round.", have: Math.min(Math.max(0, ...chs.map((c) => c.modes.rush?.best ?? 0)), 10), need: 10 },
     { id: "match", icon: "🧩", name: "Clean sweep", how: "Finish Match with no misses.", have: best("match", (b) => b.best === b.total) ? 1 : 0, need: 1 },
     { id: "explorer", icon: "🧭", name: "Explorer", how: "Try every study mode.", have: MODES.filter((m) => played.has(m)).length, need: MODES.length },
     { id: "streak3", icon: "🔥", name: "Three-day streak", how: "Study three days in a row.", have: Math.min(streak, 3), need: 3 },

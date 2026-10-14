@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { SUPABASE_URL, hasSupabase } from "./config";
 import { SEED_AUTHOR, SEED_CHAPTERS, SEED_COURSES, SEED_FUN_COURSE, SEED_PROFESSORS } from "./seed";
 import { demoFunCards } from "./demo-cards";
-import { ALL_PROFS, normalizeContent, normalizeSettings, type Chapter, type Course, type Note, type Professor, type Profile, type SetCard } from "./types";
+import { ALL_PROFS, normalizeContent, normalizeSettings, type Chapter, type Course, type Note, type Professor, type Profile, type SetCard, type CourseCard, chapterLabel } from "./types";
 
 let client: SupabaseClient | null = null;
 
@@ -182,8 +182,8 @@ async function cardsFor(courses: Course[], plays?: Map<string, number>, onlyChap
       return {
         chapterId: ch.id,
         href: `/courses/${c.slug}/${ch.professor_id ? profSlug.get(ch.professor_id) ?? ALL_PROFS : ALL_PROFS}/${ch.number}`,
-        title: c.kind === "fun" ? c.title : ch.title,
-        course: c.kind === "fun" ? "For fun" : `${c.code} · Ch. ${ch.number}`,
+        title: c.kind === "fun" ? ch.title || c.title : chapterLabel(ch).title,
+        course: c.kind === "fun" ? c.title : `${c.code} · Ch. ${chapterLabel(ch).num}`,
         kind: c.owner_id ? (c.kind ?? "class") : "official",
         terms: content.terms.length, questions: content.questions.length,
         author: c.owner_id ? author.get(c.owner_id) ?? null : null,
@@ -246,6 +246,48 @@ export async function listMyUploads(userId: string): Promise<MyUpload[]> {
         notes: (notes ?? []).filter((n: { chapter_id: string }) => n.chapter_id === ch.id).map((n: { id: string; name: string; size: number | null }) => ({ id: n.id, name: n.name, size: n.size })),
       };
     });
+}
+
+/** Sets students shared for one course code (shown on that course's page). */
+export async function listSharedForCode(code: string): Promise<SetCard[]> {
+  if (!hasSupabase()) return [];
+  const { data } = await admin().from("courses").select("*").not("owner_id", "is", null)
+    .eq("visibility", "public").eq("published", true).eq("kind", "class").ilike("code", code).order("created_at", { ascending: false }).limit(24);
+  return cardsFor((data ?? []) as Course[]);
+}
+
+/**
+ * Courses for Home/Library: library courses plus every student's shared class course ("MGMT 120B by kammab"),
+ * only those with at least one published chapter. Library courses first, then by most chapters.
+ */
+export async function listCourseCards(limit = 60, kind: "class" | "fun" = "class"): Promise<CourseCard[]> {
+  if (!hasSupabase() && kind === "fun") return [{ id: SEED_FUN_COURSE.id, slug: SEED_FUN_COURSE.slug, code: SEED_FUN_COURSE.code, title: SEED_FUN_COURSE.title, chapters: SEED_CHAPTERS.filter((ch) => ch.course_id === SEED_FUN_COURSE.id).length, author: SEED_AUTHOR, official: false }];
+  if (!hasSupabase()) return SEED_COURSES.map((c) => ({ id: c.id, slug: c.slug, code: c.code, title: c.title, chapters: SEED_CHAPTERS.filter((ch) => ch.course_id === c.id).length, author: null, official: true }));
+  const db = admin();
+  let q = db.from("courses").select("*").eq("published", true);
+  q = kind === "fun" ? q.eq("kind", "fun") : q.neq("kind", "fun");
+  const { data } = await q
+    .or("owner_id.is.null,visibility.eq.public").order("created_at", { ascending: false }).limit(300);
+  const courses = (data ?? []) as Course[];
+  if (!courses.length) return [];
+  const { data: chs } = await db.from("chapters").select("course_id").eq("published", true).in("course_id", courses.map((c) => c.id));
+  const count = new Map<string, number>();
+  for (const ch of chs ?? []) count.set(ch.course_id, (count.get(ch.course_id) ?? 0) + 1);
+  const owners = [...new Set(courses.map((c) => c.owner_id).filter(Boolean))] as string[];
+  const { data: people } = owners.length ? await db.from("profiles").select("*").in("user_id", owners) : { data: [] };
+  const who = new Map(((people ?? []) as Profile[]).map((p) => [p.user_id, p]));
+  return courses
+    .filter((c) => (count.get(c.id) ?? 0) > 0)
+    .map((c) => ({ id: c.id, slug: c.slug, code: c.code, title: c.title, professor: c.professor ?? null, chapters: count.get(c.id) ?? 0,
+      author: c.owner_id ? who.get(c.owner_id) ?? null : null, official: !c.owner_id }))
+    .sort((a, b) => Number(b.official) - Number(a.official) || b.chapters - a.chapters || a.code.localeCompare(b.code))
+    .slice(0, limit);
+}
+
+/** Other people's versions of the same course code (for "Other versions" on a course page). */
+export async function otherVersions(code: string, exceptId: string): Promise<CourseCard[]> {
+  const all = await listCourseCards(300);
+  return all.filter((c) => c.id !== exceptId && c.code.toLowerCase() === code.toLowerCase());
 }
 
 /** Most-played public chapters this week. */

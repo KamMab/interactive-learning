@@ -6,6 +6,7 @@ import { shuffle } from "@/lib/id";
 import Results from "./Results";
 import type { GP } from "./GameHost";
 import { sideLabels } from "@/lib/types";
+import Pic from "../Pic";
 
 const take = <T,>(arr: T[], n?: number) => (n && n > 0 ? arr.slice(0, n) : arr);
 
@@ -23,17 +24,29 @@ export default function Flashcards({ chapter, opts, onBack }: GP) {
     addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [done]);
   if (done) return <Results title="Flashcards" score={known} total={deck.length} extra={{ value: deck.length - known, label: "Still learning" }} onBack={onBack} onReplay={() => { setRound(r => r + 1); setI(0); setKnown(0); setLearning(0); setDone(false); }} />;
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="pill" style={{ color: "#C2571A" }}>Still learning <b>{learning}</b></span>
         <span className="mono text-sm text-muted">{i + 1} / {deck.length}</span>
         <span className="pill" style={{ color: "var(--good)" }}>Know <b>{known}</b></span>
       </div>
-      <button onClick={() => setFlipped(!flipped)} className={`fc${flipped ? " back" : ""}`} aria-label="Flip card">
-        {flipped ? <span className="flex flex-col items-center gap-3"><span className="eyebrow">{sideLabels(content).back}</span><span className="text-xl leading-relaxed" style={{ maxWidth: "46ch" }}>{card.definition}</span></span> : <span className="flex flex-col items-center gap-3"><span className="eyebrow">{sideLabels(content).front}</span><span className="fc-term">{card.term}</span></span>}
+      <button key={i} onClick={() => setFlipped(!flipped)} className={`fc3${flipped ? " flipped" : ""}`} aria-label={flipped ? "Show the front" : "Flip card"} aria-live="polite">
+        <span className="fc3-in">
+          <span className="fc3-face" aria-hidden={flipped}>
+            <span className="eyebrow">{sideLabels(content).front}</span>
+            {card.image
+              ? <Pic src={card.image} alt="Picture to identify" className="fc-pic" />
+              : <span className={`fc-term${card.term.length > 60 ? " long" : ""}`}>{card.term}</span>}
+          </span>
+          <span className="fc3-face fc3-back" aria-hidden={!flipped}>
+            <span className="eyebrow">{card.image ? "Answer" : sideLabels(content).back}</span>
+            {card.image && <span className="fc-term">{card.term}</span>}
+            {(!card.image || (card.definition && card.definition !== card.term)) && <span className={`fc-def${card.definition.length > 220 ? " long" : ""}`}>{card.definition}</span>}
+          </span>
+        </span>
       </button>
-      <p className="note text-center">Click the card or press Space to flip.</p>
-      <div className="grid grid-cols-2 gap-3">
+      <p className="fc-hint"><kbd>Space</kbd> or click the card to flip</p>
+      <div className="mx-auto grid w-full max-w-xl grid-cols-2 gap-3">
         <button className="btn-ghost fc-learn" disabled={!flipped} onClick={() => answer(false)}>Still learning</button>
         <button className="btn-ghost fc-know" disabled={!flipped} onClick={() => answer(true)}>Know it</button>
       </div>

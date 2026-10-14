@@ -5,6 +5,7 @@ import { store } from "@/lib/store";
 import { shuffle } from "@/lib/id";
 import Results from "./Results";
 import type { GP } from "./GameHost";
+import Combo from "../Combo";
 
 const take = <T,>(arr: T[], n?: number) => (n && n > 0 ? arr.slice(0, n) : arr);
 
@@ -35,14 +36,13 @@ export default function Entries({ chapter, opts, onBack }: GP) {
       <div className="sheet enter" key={entry.id}>
         <span className="tag">Journal entry</span>
         <p className="mb-4 mt-3 text-[17px] leading-relaxed">{entry.scenario}</p>
-        <datalist id="accounts">{accounts.map(a => <option key={a} value={a} />)}</datalist>
         <div className="je-wrap">
           <table className="je">
             <thead><tr><th>Account</th><th className="amt">Debit</th><th className="amt">Credit</th><th style={{ width: 32 }} /></tr></thead>
             <tbody>
               {rows.map((r, idx) => (
                 <tr key={idx}>
-                  <td style={{ paddingLeft: r.credit ? 28 : 8 }}><input id={`acct-${idx}`} list="accounts" className="input" placeholder="Start typing an account" value={r.account} disabled={checked !== null} onChange={e => set(idx, { account: e.target.value })} /></td>
+                  <td style={{ paddingLeft: r.credit ? 28 : 8 }}><Combo id={`acct-${idx}`} options={accounts} placeholder="Start typing an account" value={r.account} disabled={checked !== null} onChange={v => set(idx, { account: v })} /></td>
                   <td className="amt"><input id={`dr-${idx}`} inputMode="decimal" className="input mono text-right" value={r.debit} disabled={checked !== null} onChange={e => set(idx, { debit: e.target.value.replace(/[^0-9.]/g, ""), credit: "" })} /></td>
                   <td className="amt"><input id={`cr-${idx}`} inputMode="decimal" className="input mono text-right" value={r.credit} disabled={checked !== null} onChange={e => set(idx, { credit: e.target.value.replace(/[^0-9.]/g, ""), debit: "" })} /></td>
                   <td>{rows.length > 1 && checked === null && <button className="x" aria-label="Remove line" onClick={() => setRows(rows.filter((_, j) => j !== idx))}>×</button>}</td>

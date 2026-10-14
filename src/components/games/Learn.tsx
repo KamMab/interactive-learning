@@ -5,11 +5,12 @@ import { chapterProgress, save } from "@/lib/store";
 import { shuffle } from "@/lib/id";
 import type { GP } from "./GameHost";
 import { sideLabels } from "@/lib/types";
+import Pic from "../Pic";
 
 // Learn: short rounds of mixed questions. Each item needs two correct answers to be mastered;
 // a miss sends it back to "still learning" and it returns later in the round.
 // Levels: missing = not studied yet, 0 = missed, 1 = right once, 2 = mastered.
-type Item = { id: string; prompt: string; choices: string[]; answer: number; explanation: string; label: string };
+type Item = { id: string; prompt: string; choices: string[]; answer: number; explanation: string; label: string; image?: string };
 type Asked = Item & { order: number[]; kind: "term" | "definition" | "question" };
 
 const MASTERED = 2;
@@ -20,19 +21,19 @@ function buildItems(content: GP["chapter"]["content"]): Item[] {
   for (const t of terms) {
     const others = shuffle(terms.filter((x) => x.id !== t.id));
     if (others.length >= 1) {
-      items.push({ id: "t:" + t.id, prompt: t.definition, choices: [t.term, ...others.slice(0, 3).map((o) => o.term)], answer: 0,
-        explanation: `${t.term}: ${t.definition}`, label: t.term });
+      items.push({ id: "t:" + t.id, prompt: t.image ? "" : t.definition, choices: [t.term, ...others.slice(0, 3).map((o) => o.term)], answer: 0,
+        explanation: t.image ? (t.definition && t.definition !== t.term ? `${t.term}: ${t.definition}` : t.term) : `${t.term}: ${t.definition}`, label: t.term, image: t.image });
     }
   }
   for (const q of content.questions) {
-    items.push({ id: "q:" + q.id, prompt: q.prompt, choices: q.choices, answer: q.answer, explanation: q.explanation, label: q.prompt });
+    items.push({ id: "q:" + q.id, prompt: q.prompt, choices: q.choices, answer: q.answer, explanation: q.explanation, label: q.prompt, image: q.image });
   }
   return items;
 }
 
 // On the second pass a term is asked the other way round: term → definition.
 function ask(item: Item, level: number, content: GP["chapter"]["content"]): Asked {
-  if (item.id.startsWith("t:") && level >= 1) {
+  if (item.id.startsWith("t:") && level >= 1 && !item.image) {
     const t = content.terms.find((x) => "t:" + x.id === item.id)!;
     const others = shuffle(content.terms.filter((x) => x.id !== t.id)).slice(0, 3);
     const choices = [t.definition, ...others.map((o) => o.definition)];
@@ -57,7 +58,12 @@ export default function Learn({ chapter, opts, onBack }: GP) {
   const [retried, setRetried] = useState<Set<string>>(new Set());
   const correctTotal = useRef(0), answeredTotal = useRef(0);
 
-  const persist = (lv: Record<string, number>) => { chapterProgress(chapter.id).learn = lv; save(); };
+  // Merge into the chapter's saved levels so studying one section never wipes another section's progress.
+  const persist = (lv: Record<string, number>) => {
+    const p = chapterProgress(chapter.id), next = { ...(p.learn ?? {}) };
+    for (const it of all) { if (lv[it.id] === undefined) delete next[it.id]; else next[it.id] = lv[it.id]; }
+    p.learn = next; save();
+  };
   const counts = (lv: Record<string, number>) => {
     const vals = all.map((it) => lv[it.id]);
     return {
@@ -177,10 +183,11 @@ export default function Learn({ chapter, opts, onBack }: GP) {
       {bar}
       <div className="sheet enter" key={cur.id + queue.length}>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="tag">{cur.kind === "definition" ? `Pick the ${sideLabels(content).back.toLowerCase()}` : cur.kind === "term" ? `Which ${sideLabels(content).front.toLowerCase()} goes with this?` : "Question"}</span>
+          <span className="tag">{cur.image && cur.kind === "term" ? "Which one is this?" : cur.kind === "definition" ? `Pick the ${sideLabels(content).back.toLowerCase()}` : cur.kind === "term" ? `Which ${sideLabels(content).front.toLowerCase()} goes with this?` : "Question"}</span>
           <span className="mono text-[13px] text-muted">Round {round} · {queue.length} left</span>
         </div>
-        <p className={`mb-4 mt-3 leading-snug ${isTermBack ? "fc-term text-[clamp(24px,5vw,34px)]" : "text-[clamp(18px,3.2vw,22px)] font-bold"}`}>{cur.prompt}</p>
+        {cur.image && <Pic src={cur.image} alt="Picture for this question" className="q-pic mt-3" />}
+{cur.prompt ? <p className={`mb-4 mt-3 leading-snug ${isTermBack ? "fc-term text-[clamp(24px,5vw,34px)]" : "text-[clamp(18px,3.2vw,22px)] font-bold"}`}>{cur.prompt}</p> : <div className="mb-4" />}
         <div className="grid gap-3 sm:grid-cols-2">
           {cur.order.map((idx, n) => {
             const st = picked === null ? "" : idx === cur.answer ? "ok" : idx === picked ? "bad" : "dim";

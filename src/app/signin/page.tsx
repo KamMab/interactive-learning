@@ -16,7 +16,8 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<R
           Studying works without an account.
         </p>
       </div>
-      {sp.error === "failed" && <p className="fb bad"><strong>Sign-in didn&apos;t finish.</strong><br />Try again, or request a new email link.</p>}
+      {sp.error === "failed" && <p className="fb bad"><strong>Sign-in didn&apos;t finish.</strong><br />Try again, or request a new email link. Open it in the same browser you asked for it in.</p>}
+      {sp.error === "expired" && <p className="fb bad"><strong>That link has expired or was already used.</strong><br />Each email link works once. Request a new one below.</p>}
       {AUTH_ENABLED ? <SignInForm next={next} /> : <p className="card p-5 text-muted">Sign-in isn&apos;t switched on yet. The site owner turns it on in the settings described in the README.</p>}
     </div>
   );

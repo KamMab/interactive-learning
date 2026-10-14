@@ -4,6 +4,7 @@ import { recordResult } from "@/lib/progress";
 import { store } from "@/lib/store";
 import { shuffle } from "@/lib/id";
 import Results from "./Results";
+import Pic from "../Pic";
 import type { GP } from "./GameHost";
 
 const take = <T,>(arr: T[], n?: number) => (n && n > 0 ? arr.slice(0, n) : arr);
@@ -41,6 +42,7 @@ export default function Quiz({ chapter, opts, onBack }: GP) {
       {limit > 0 && <div className="timer"><i style={{ width: `${picked !== null ? 0 : left / limit * 100}%` }} /></div>}
       <div className="sheet enter" key={q.id}>
         <span className="tag">{chapter.title}</span>
+        {q.image && <Pic src={q.image} alt="Picture for this question" className="q-pic mt-3" />}
         <p className="mb-4 mt-3 text-[clamp(19px,3.4vw,23px)] font-bold leading-snug">{q.prompt}</p>
         <div className="grid gap-3">
           {q.choices.map((c, idx) => {
