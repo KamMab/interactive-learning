@@ -233,15 +233,14 @@ export async function generateStudySet(input: GenerateInput): Promise<GenerateRe
     { type: "text", text: `${context}\n\n${task}` },
   ];
 
-  const stream = client.messages.stream({
-    model: MODEL,
-    max_tokens: 32000,
-    system: SYSTEM,
-    tools: [studySetTool],
-    tool_choice: { type: "tool", name: "save_study_set" },
-    messages: [{ role: "user", content }],
-  });
-  const message = await stream.finalMessage();
+  // Newer models don't accept a forced tool_choice, so ask for the tool in words and nudge once if needed.
+  const ask = async (messages: Anthropic.MessageParam[]) =>
+    client.messages.stream({ model: MODEL, max_tokens: 32000, system: SYSTEM, tools: [studySetTool], tool_choice: { type: "auto" }, messages }).finalMessage();
+  const first: Anthropic.MessageParam = { role: "user", content: [...content, { type: "text", text: "Save the result by calling the save_study_set tool." }] };
+  let message = await ask([first]);
+  if (!message.content.some((b) => b.type === "tool_use")) {
+    message = await ask([first, { role: "assistant", content: message.content }, { role: "user", content: "Call the save_study_set tool now with the full study set." }]);
+  }
 
   const call = message.content.find((b) => b.type === "tool_use");
   if (!call || call.type !== "tool_use") throw new Error("Claude didn't return a study set. Try again.");

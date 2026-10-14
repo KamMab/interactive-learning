@@ -211,6 +211,43 @@ export async function listSetsByOwner(userId: string, includePrivate = false): P
   return cardsFor((data ?? []) as Course[]);
 }
 
+export type MyUpload = {
+  chapterId: string; title: string; course: string; href: string | null; published: boolean;
+  notes: { id: string; name: string; size: number | null }[];
+};
+
+/** Every chapter a student made (built or not) with the note files behind it, for "Your uploads". */
+export async function listMyUploads(userId: string): Promise<MyUpload[]> {
+  if (!hasSupabase()) return [];
+  const { data: courses } = await admin().from("courses").select("*").eq("owner_id", userId).order("created_at", { ascending: false });
+  const list = (courses ?? []) as Course[];
+  if (!list.length) return [];
+  const ids = list.map((c) => c.id);
+  const [{ data: chs }, { data: profs }] = await Promise.all([
+    admin().from("chapters").select("id,course_id,professor_id,number,title,published,updated_at").in("course_id", ids),
+    admin().from("professors").select("id,slug").in("course_id", ids),
+  ]);
+  const chapters = (chs ?? []) as { id: string; course_id: string; professor_id: string | null; number: number; title: string; published: boolean; updated_at: string }[];
+  const { data: notes } = chapters.length
+    ? await admin().from("notes").select("id,chapter_id,name,size,created_at").in("chapter_id", chapters.map((c) => c.id)).order("created_at")
+    : { data: [] };
+  const byCourse = new Map(list.map((c) => [c.id, c]));
+  const profSlug = new Map((profs ?? []).map((p: { id: string; slug: string }) => [p.id, p.slug]));
+  return chapters
+    .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
+    .map((ch) => {
+      const c = byCourse.get(ch.course_id)!;
+      return {
+        chapterId: ch.id,
+        title: c.kind === "fun" ? c.title : ch.title,
+        course: c.kind === "fun" ? "For fun" : `${c.code} · Ch. ${ch.number}`,
+        href: ch.published ? `/courses/${c.slug}/${ch.professor_id ? profSlug.get(ch.professor_id) ?? ALL_PROFS : ALL_PROFS}/${ch.number}` : null,
+        published: ch.published,
+        notes: (notes ?? []).filter((n: { chapter_id: string }) => n.chapter_id === ch.id).map((n: { id: string; name: string; size: number | null }) => ({ id: n.id, name: n.name, size: n.size })),
+      };
+    });
+}
+
 /** Most-played public chapters this week. */
 export async function trendingSets(limit = 8): Promise<SetCard[]> {
   if (!hasSupabase()) return [];
