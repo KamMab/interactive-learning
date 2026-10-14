@@ -2,8 +2,9 @@ import Link from "next/link";
 import { currentUser } from "@/lib/auth-server";
 import { isAdmin } from "@/lib/admin-auth";
 import { notFound } from "next/navigation";
-import { getChapter, getCourseBySlug, getProfessorBySlug, getProfile } from "@/lib/db";
+import { getCourseBySlug, getProfessorBySlug, getProfile, listChapters } from "@/lib/db";
 import ChapterStudy from "@/components/ChapterStudy";
+import Summary from "@/components/Summary";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,10 @@ export default async function ChapterPage({
   if (!course) notFound();
   const prof = await getProfessorBySlug(course.id, profSlug);
   if (!prof) notFound();
-  const chapter = await getChapter(course.id, prof === "all" ? null : prof.id, Number(num));
+  // "all" finds the chapter whoever it was written for (shared version first).
+  const chapters = await listChapters(course.id);
+  const matches = chapters.filter((c) => c.number === Number(num) && (prof === "all" || c.professor_id === prof.id || c.professor_id === null));
+  const chapter = (prof === "all" ? matches.find((c) => c.professor_id === null) : matches.find((c) => c.professor_id === prof.id)) ?? matches[0];
   if (!chapter) notFound();
   const who = prof === "all" ? "" : ` · ${prof.name}`;
   const author = course.owner_id ? await getProfile(course.owner_id) : null;
@@ -29,10 +33,7 @@ export default async function ChapterPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href={`/courses/${course.slug}`} className="link">{course.code}</Link>
-          {prof !== "all" && <><span className="text-muted">/</span><Link href={`/courses/${course.slug}/${profSlug}`} className="link">{prof.name}</Link></>}
-        </div>
+        {!fun && <Link href={`/courses/${course.slug}`} className="link">{course.code}{author ? ` by ${author.display_name}` : ""}</Link>}
         <span className="eyebrow mt-4 block">{fun ? "For fun" : `${course.code}${who} · Chapter ${chapter.number}`}</span>
         <h1 className="big mt-2">{chapter.title}</h1>
         <p className="mt-2 text-sm text-muted">
@@ -42,10 +43,11 @@ export default async function ChapterPage({
               : <>Only you can see this set.</>
             : <>From the Interactive Learning library</>}
         </p>
-        {chapter.content.summary && <p className="mt-2 max-w-[60ch] text-muted">{chapter.content.summary}</p>}
+        {chapter.content.summary && <Summary text={chapter.content.summary} />}
       </div>
       <ChapterStudy chapter={chapter} label={`${course.code}${who} · Ch. ${chapter.number} ${chapter.title}`}
-        initialMode={typeof sp.mode === "string" ? sp.mode : undefined} />
+        initialMode={typeof sp.mode === "string" ? sp.mode : undefined}
+        initialSection={typeof sp.section === "string" ? sp.section : undefined} />
     </div>
   );
 }

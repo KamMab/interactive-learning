@@ -57,7 +57,12 @@ export default function Learn({ chapter, opts, onBack }: GP) {
   const [retried, setRetried] = useState<Set<string>>(new Set());
   const correctTotal = useRef(0), answeredTotal = useRef(0);
 
-  const persist = (lv: Record<string, number>) => { chapterProgress(chapter.id).learn = lv; save(); };
+  // Merge into the chapter's saved levels so studying one section never wipes another section's progress.
+  const persist = (lv: Record<string, number>) => {
+    const p = chapterProgress(chapter.id), next = { ...(p.learn ?? {}) };
+    for (const it of all) { if (lv[it.id] === undefined) delete next[it.id]; else next[it.id] = lv[it.id]; }
+    p.learn = next; save();
+  };
   const counts = (lv: Record<string, number>) => {
     const vals = all.map((it) => lv[it.id]);
     return {

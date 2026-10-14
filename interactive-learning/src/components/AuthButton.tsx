@@ -22,9 +22,9 @@ export default function AuthButton() {
   if (user) {
     const name = user.user_metadata?.name?.split(" ")[0] || user.email?.split("@")[0] || "Account";
     return (
-      <button onClick={async () => { await sb.auth.signOut(); location.href = "/"; }} className="gear" title={user.email ?? ""}>
-        <span className="avatar">{name[0]?.toUpperCase()}</span><span className="gl">{name} · Sign out</span>
-      </button>
+      <Link href="/account" className="gear" title={`${user.email ?? ""} · Profile and sign out`}>
+        <span className="avatar">{name[0]?.toUpperCase()}</span><span className="gl">Profile</span>
+      </Link>
     );
   }
   return <Link href="/signin" className="gear"><span>Sign in</span></Link>;

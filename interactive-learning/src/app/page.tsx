@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { listCourses, listMyCourses, listStudentSets, trendingSets } from "@/lib/db";
+import { listCourseCards, listMyCourses, listStudentSets, trendingSets } from "@/lib/db";
+import CourseShelf from "@/components/CourseShelf";
 import { currentUser } from "@/lib/auth-server";
 import { hasSupabase } from "@/lib/config";
 import { demoCards } from "@/lib/demo-cards";
@@ -13,7 +14,7 @@ export default async function Home() {
   const [trending, fun, courses, mine] = await Promise.all([
     hasSupabase() ? trendingSets(8) : Promise.resolve(demoCards()),
     listStudentSets("fun", 8),
-    listCourses(),
+    listCourseCards(6),
     user ? listMyCourses(user.id) : Promise.resolve([]),
   ]);
 
@@ -34,21 +35,15 @@ export default async function Home() {
 
       <section className="flex flex-col gap-4">
         <div className="flex flex-wrap items-end justify-between gap-2">
-          <div><h2 className="text-[24px] font-bold">For fun</h2><p className="text-sm text-muted">Games other Bruins made: capitals, trivia, anything.</p></div>
+          <div><h2 className="text-[24px] font-bold">For fun</h2><p className="text-sm text-muted">Games other students made: capitals, trivia, anything.</p></div>
           <Link href="/upload" className="btn-ghost">Make a game</Link>
         </div>
         <SetShelf cards={fun} empty={<div className="card p-5"><p className="text-muted">No games yet. Be the first: upload an idea like &ldquo;US state capitals&rdquo; and choose <b>For fun</b>.</p></div>} />
       </section>
 
       <section className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-end justify-between gap-2"><h2 className="text-[24px] font-bold">UCLA courses</h2><Link href="/library" className="link">See all</Link></div>
-        <div className="shelf">
-          {courses.slice(0, 6).map((c) => (
-            <Link key={c.id} href={`/courses/${c.slug}`} className="book">
-              <div className="book-cover"><span className="eyebrow">Course</span><span className="code">{c.code}</span><span className="ttl">{c.title}</span></div>
-            </Link>
-          ))}
-        </div>
+        <div className="flex flex-wrap items-end justify-between gap-2"><h2 className="text-[24px] font-bold">Courses</h2><Link href="/library" className="link">See all</Link></div>
+        <CourseShelf courses={courses} empty={<p className="text-muted">No courses yet. <Link href="/upload" className="underline">Upload your class notes</Link> to start one.</p>} />
       </section>
 
       {mine.length > 0 && <p className="text-sm text-muted">You&apos;ve made {mine.length} set{mine.length === 1 ? "" : "s"}. <Link href="/mine" className="underline">Open Your chapters</Link></p>}

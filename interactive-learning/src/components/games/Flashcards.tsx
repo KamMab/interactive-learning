@@ -29,8 +29,17 @@ export default function Flashcards({ chapter, opts, onBack }: GP) {
         <span className="mono text-sm text-muted">{i + 1} / {deck.length}</span>
         <span className="pill" style={{ color: "var(--good)" }}>Know <b>{known}</b></span>
       </div>
-      <button onClick={() => setFlipped(!flipped)} className={`fc${flipped ? " back" : ""}`} aria-label="Flip card">
-        {flipped ? <span className="flex flex-col items-center gap-3"><span className="eyebrow">{sideLabels(content).back}</span><span className="text-xl leading-relaxed" style={{ maxWidth: "46ch" }}>{card.definition}</span></span> : <span className="flex flex-col items-center gap-3"><span className="eyebrow">{sideLabels(content).front}</span><span className="fc-term">{card.term}</span></span>}
+      <button key={i} onClick={() => setFlipped(!flipped)} className={`fc3${flipped ? " flipped" : ""}`} aria-label={flipped ? "Show the front" : "Flip card"} aria-live="polite">
+        <span className="fc3-in">
+          <span className="fc3-face" aria-hidden={flipped}>
+            <span className="eyebrow">{sideLabels(content).front}</span>
+            <span className={`fc-term${card.term.length > 60 ? " long" : ""}`}>{card.term}</span>
+          </span>
+          <span className="fc3-face fc3-back" aria-hidden={!flipped}>
+            <span className="eyebrow">{sideLabels(content).back}</span>
+            <span className={`fc-def${card.definition.length > 220 ? " long" : ""}`}>{card.definition}</span>
+          </span>
+        </span>
       </button>
       <p className="note text-center">Click the card or press Space to flip.</p>
       <div className="grid grid-cols-2 gap-3">

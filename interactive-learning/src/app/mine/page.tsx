@@ -20,7 +20,7 @@ export default async function Mine() {
       <section className="flex flex-col gap-4">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <h2 className="text-[24px] font-bold">Made by you</h2>
-          <div className="flex flex-wrap gap-2">{user && <Link href="/account/password" className="btn-ghost">Password</Link>}{profile && <Link href={`/u/${profile.handle}`} className="btn-ghost">Your public page</Link>}<Link href="/upload" className="btn">Upload</Link></div>
+          <div className="flex flex-wrap gap-2">{user && <Link href="/account" className="btn-ghost">Profile</Link>}{profile && <Link href={`/u/${profile.handle}`} className="btn-ghost">Your public page</Link>}<Link href="/upload" className="btn">Upload</Link></div>
         </div>
         {user
           ? <SetShelf cards={sets} showVisibility empty={<p className="card p-5 text-muted">You haven&apos;t made anything yet. <Link href="/upload" className="underline">Upload notes or an idea</Link>.</p>} />

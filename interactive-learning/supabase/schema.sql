@@ -169,3 +169,7 @@ drop policy if exists "write own leaderboard" on leaderboard;
 create policy "write own leaderboard" on leaderboard for insert with check (auth.uid() = user_id);
 drop policy if exists "update own leaderboard" on leaderboard;
 create policy "update own leaderboard" on leaderboard for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ============ Courses by author ============
+-- Each student's course is their own version ("MATH 1 by kam"); the professor is just a label on it.
+alter table courses add column if not exists professor text;

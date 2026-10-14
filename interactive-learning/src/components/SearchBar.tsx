@@ -83,7 +83,7 @@ export default function SearchBar() {
       {open && q.trim() && (
         <div className="search-pop" id="search-results" role="listbox">
           {items === null && <p className="search-empty">Loading…</p>}
-          {items !== null && results.length === 0 && <p className="search-empty">Nothing matches “{q.trim()}”. Try a course code like MGMT 120B or a term.</p>}
+          {items !== null && results.length === 0 && <p className="search-empty">Nothing matches “{q.trim()}”. Try a course code like MATH 1 or a term.</p>}
           {results.map((it, i) => {
             const header = it.kind !== lastKind ? <div className="search-group">{GROUPS[it.kind]}</div> : null;
             lastKind = it.kind;

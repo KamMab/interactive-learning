@@ -4,7 +4,7 @@ import { MODE_ICON } from "./icons";
 import { openSettings } from "./SiteHeader";
 import { GAMES } from "./games/GameHost";
 import { PLAYING, chapterProgress, noteVisit, save, store, subscribe } from "@/lib/store";
-import { MODE_INFO, modeCount, type Chapter, type Mode } from "@/lib/types";
+import { CORE_MODES, EXTRA_MODES, MODE_INFO, contentFor, modeCount, modeName, usableSections, type Chapter, type ChapterContent, type Mode } from "@/lib/types";
 
 type Chips = { key: "count" | "pairs" | "seconds"; label: string; list: number[]; def: number; fmt: (n: number) => string };
 
@@ -26,13 +26,27 @@ function optionChips(mode: Mode, chapter: Chapter): Chips {
   return { key: "count", label: mode === "flashcards" ? "Cards" : mode === "entries" ? "Entries" : mode === "map" ? "Places" : "Questions", list, def, fmt: (n) => (n ? String(n) : `All ${pool}`) };
 }
 
-// Quizlet-style chapter page: the first mode (Learn by default) opens right away at the top,
-// and every other way to study sits underneath as tiles that swap what's on top.
-export default function ChapterStudy({ chapter, label, initialMode }: { chapter: Chapter; label: string; initialMode?: string }) {
+/** Share of a part's terms and questions mastered in Learn (levels are saved per item for the whole chapter). */
+function mastery(c: ChapterContent, levels: Record<string, number> | undefined) {
+  const ids = [...c.terms.map((t) => "t:" + t.id), ...c.questions.map((q) => "q:" + q.id)];
+  if (!ids.length) return 0;
+  return ids.filter((id) => (levels?.[id] ?? 0) >= 2).length / ids.length;
+}
+
+// Quizlet-style chapter page: Learn opens right away at the top, and every other way to study sits
+// underneath as tiles that swap what's on top. Long chapters can be studied one section at a time.
+export default function ChapterStudy({ chapter, label, initialMode, initialSection }: { chapter: Chapter; label: string; initialMode?: string; initialSection?: string }) {
   const [ready, setReady] = useState(false);
   const [, force] = useState(0);
   const stage = useRef<HTMLDivElement>(null);
-  const modes = chapter.settings.modes.filter((m) => modeCount(m, chapter.content) > 0);
+  const sections = usableSections(chapter.content);
+  const [section, setSection] = useState<string | null>(sections.some((x) => x.id === initialSection) ? initialSection! : null);
+  const content = contentFor(chapter.content, section);
+  const part: Chapter = { ...chapter, content };
+  // Learn, Flashcards and Quick-fire for every set; the extras the set was built with go under "More ways to study".
+  const core = CORE_MODES.filter((m) => modeCount(m, content) > 0);
+  const extras = chapter.settings.modes.filter((m) => EXTRA_MODES.includes(m) && modeCount(m, content) > 0);
+  const modes = [...core, ...extras];
   const progress = ready ? chapterProgress(chapter.id) : null;
   const lockOn = chapter.settings.requireFlashcardsFirst && modes.includes("flashcards");
   const locked = (m: Mode) => lockOn && m !== "flashcards" && !progress?.flashcardsDone;
@@ -54,7 +68,7 @@ export default function ChapterStudy({ chapter, label, initialMode }: { chapter:
   useEffect(() => {
     if (!ready || mode) return;
     const m = opening();
-    if (m) { setMode(m); setOpt(optionChips(m, chapter).def); }
+    if (m) { setMode(m); setOpt(optionChips(m, part).def); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
@@ -64,23 +78,30 @@ export default function ChapterStudy({ chapter, label, initialMode }: { chapter:
     return () => { PLAYING.chapterId = null; PLAYING.mode = null; };
   }, [mode, chapter.id]);
 
-  if (modes.length === 0) return <p className="text-muted">Nothing to study here yet.</p>;
+  if (modes.length === 0 && !sections.length) return <p className="text-muted">Nothing to study here yet.</p>;
 
   function pick(m: Mode) {
     if (locked(m)) return;
     setMode(m);
-    setOpt(optionChips(m, chapter).def);
+    setOpt(optionChips(m, part).def);
     setRun((r) => r + 1);
     const p = chapterProgress(chapter.id); p.lastMode = m; save();
     try { const u = new URL(location.href); u.searchParams.set("mode", m); history.replaceState(null, "", u); } catch {}
     stage.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+  function pickSection(id: string | null) {
+    const next = contentFor(chapter.content, id);
+    const keep = mode && modeCount(mode, next) > 0 ? mode : CORE_MODES.find((m) => modeCount(m, next) > 0);
+    setSection(id);
+    if (keep) { setMode(keep); setOpt(optionChips(keep, { ...chapter, content: next }).def); }
+    setRun((r) => r + 1);
+    try { const u = new URL(location.href); if (id) u.searchParams.set("section", id); else u.searchParams.delete("section"); history.replaceState(null, "", u); } catch {}
+  }
   const toModes = () => document.getElementById("modes")?.scrollIntoView({ behavior: "smooth", block: "start" });
 
-  const oc = mode ? optionChips(mode, chapter) : null;
-  const Game = mode ? GAMES[mode] : null;
-  const study = modes.filter((m) => !MODE_INFO[m].game);
-  const games = modes.filter((m) => MODE_INFO[m].game);
+  const oc = mode && modes.includes(mode) ? optionChips(mode, part) : null;
+  const Game = mode && modes.includes(mode) ? GAMES[mode] : null;
+  const secTitle = section ? sections.find((x) => x.id === section)?.title : null;
   const timer = ready ? store().settings.timer : 15;
 
   const tile = (m: Mode) => {
@@ -88,7 +109,7 @@ export default function ChapterStudy({ chapter, label, initialMode }: { chapter:
     return (
       <button key={m} className="mtile2" aria-pressed={mode === m} disabled={locked(m)} onClick={() => pick(m)}>
         <span className="mtile2-ic">{MODE_ICON[m]}</span>
-        <span className="mtile2-name">{MODE_INFO[m].name}</span>
+        <span className="mtile2-name">{modeName(m, chapter.content)}</span>
         <span className="mtile2-blurb">{locked(m) ? "Finish flashcards once to unlock." : MODE_INFO[m].blurb}</span>
         {mode === m ? <span className="tag ok">Studying now</span> : st && m !== "flashcards" && m !== "learn" ? <span className="tag">Best {st.best}/{st.total}</span> : null}
       </button>
@@ -97,11 +118,31 @@ export default function ChapterStudy({ chapter, label, initialMode }: { chapter:
 
   return (
     <div className="flex flex-col gap-10">
+      {sections.length > 1 && (
+        <section className="flex flex-col gap-3" aria-label="Sections">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-[18px] font-bold">Sections</h2>
+            <span className="note">Study the whole chapter or one section at a time. Progress is tracked for each.</span>
+          </div>
+          <div className="secs">
+            {[{ id: null as string | null, title: "Whole chapter" }, ...sections].map((x, i) => {
+              const pct = ready ? Math.round(mastery(contentFor(chapter.content, x.id), progress?.learn) * 100) : 0;
+              return (
+                <button key={x.id ?? "all"} className="sec" aria-pressed={section === x.id} onClick={() => pickSection(x.id)}>
+                  <span className="sec-t">{x.id ? <><b className="mono">{i}.</b> {x.title}</> : x.title}</span>
+                  <span className="sec-bar" aria-hidden><i style={{ width: `${pct}%` }} /></span>
+                  <span className="sec-p mono">{pct}% mastered</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
       <section ref={stage} className="stage" aria-label="Study">
         <div className="stage-h">
           <div className="flex min-w-0 items-center gap-3">
             {mode && <span className="stage-ic">{MODE_ICON[mode]}</span>}
-            <div className="min-w-0"><span className="eyebrow">Studying</span><h2 className="text-[24px] font-bold">{mode ? MODE_INFO[mode].name : "…"}</h2></div>
+            <div className="min-w-0"><span className="eyebrow">{secTitle ? `Studying · ${secTitle}` : "Studying"}</span><h2 className="text-[24px] font-bold">{mode ? modeName(mode, chapter.content) : "…"}</h2></div>
           </div>
           {oc && (
             <div className="flex flex-wrap items-center gap-2">
@@ -114,18 +155,18 @@ export default function ChapterStudy({ chapter, label, initialMode }: { chapter:
           )}
         </div>
         {Game && mode && oc ? (
-          <Game key={`${mode}-${run}`} chapter={{ id: chapter.id, title: label, content: chapter.content, settings: chapter.settings }}
+          <Game key={`${mode}-${section ?? "all"}-${run}`} chapter={{ id: chapter.id, title: label, content, settings: chapter.settings }}
             opts={{ [oc.key]: opt }} onBack={toModes} />
-        ) : <div className="card h-72 animate-pulse" />}
+        ) : modes.length === 0 ? <p className="card p-5 text-muted">Nothing in this section yet.</p> : <div className="card h-72 animate-pulse" />}
       </section>
 
       <section id="modes" className="flex flex-col gap-4">
-        <h2 className="text-[22px] font-bold">Study this chapter</h2>
-        <div className="mtiles">{study.map(tile)}</div>
-        {games.length > 0 && (
+        <h2 className="text-[22px] font-bold">{secTitle ? "Study this section" : "Study this chapter"}</h2>
+        <div className="mtiles">{core.map(tile)}</div>
+        {extras.length > 0 && (
           <>
-            <h2 className="mt-4 text-[22px] font-bold">Play your way to mastery</h2>
-            <div className="mtiles">{games.map(tile)}</div>
+            <h2 className="mt-4 text-[22px] font-bold">More ways to study</h2>
+            <div className="mtiles">{extras.map(tile)}</div>
           </>
         )}
       </section>

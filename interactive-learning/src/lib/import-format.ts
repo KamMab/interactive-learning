@@ -10,9 +10,10 @@ export const FORMAT_RULES = `Shape the set to the subject instead of forcing one
 - entries: accounting journal entries only (debits equal credits, 0 in the unused column). Use [] for every other subject.
 - map: geography only, when the places are US states or world countries, using the exact names below. Otherwise null.
 - modes: the study modes that suit this material, best first: learn (adaptive rounds, a good first choice), flashcards, quiz (timed multiple choice), map, entries, match (pair both sides of terms), rush (rapid-fire questions).
-Make 10-25 terms and 6-15 questions unless the topic is smaller.`;
+- sections: when the material is long (several distinct topics, or more than about 30 terms and questions), split it into 2-8 sections in the order it's taught, list their titles in "sections", and give every term, question, entry and map item a "section" number (1 = the first section). Leave "sections" empty for short sets.
+Make 10-25 terms and 6-15 questions unless the topic is smaller. For a long chapter with sections, cover every section: about 8-15 terms and 5-10 questions each.`;
 
-export const FORMAT_SHAPE = `{"summary": string, "labels": {"front": string, "back": string} | null, "terms": [{"term": string, "definition": string}], "questions": [{"prompt": string, "choices": [string, string, string, string], "answer": number, "explanation": string}], "entries": [{"scenario": string, "lines": [{"account": string, "debit": number, "credit": number}], "explanation": string}], "map": {"region": "us-states" | "world", "ask": string, "items": [{"place": string, "prompt": string}]} | null, "modes": [string]}`;
+export const FORMAT_SHAPE = `{"summary": string, "sections": [string], "labels": {"front": string, "back": string} | null, "terms": [{"term": string, "definition": string, "section": number}], "questions": [{"prompt": string, "choices": [string, string, string, string], "answer": number, "explanation": string, "section": number}], "entries": [{"scenario": string, "lines": [{"account": string, "debit": number, "credit": number}], "explanation": string, "section": number}], "map": {"region": "us-states" | "world", "ask": string, "items": [{"place": string, "prompt": string, "section": number}]} | null, "modes": [string]}`;
 
 export const MAP_NAME_LIST = `Map place names. us-states: ${MAP_NAMES["us-states"].join(", ")}. world: ${MAP_NAMES.world.join(", ")}.`;
 
@@ -38,26 +39,43 @@ export function parseImport(raw: string): { content: ChapterContent; settings: C
   return cleanSet(out);
 }
 
+/** Turns a raw "sections" list plus per-item section numbers (1-based) into section ids. */
+export function sectionMapper(raw: any) {
+  const list = (Array.isArray(raw?.sections) ? raw.sections : [])
+    .map((x: any) => String(typeof x === "string" ? x : x?.title ?? "").trim()).filter(Boolean).slice(0, 12);
+  if (list.length < 2) return { sections: undefined, of: (_: any): string | undefined => undefined };
+  const sections = list.map((t: string) => ({ id: "sec-" + uid(), title: t.slice(0, 80) }));
+  return {
+    sections,
+    of: (it: any): string | undefined => {
+      const n = Number(it?.section);
+      return Number.isInteger(n) && n >= 1 && n <= sections.length ? sections[n - 1].id : undefined;
+    },
+  };
+}
+
 export function cleanSet(out: any): { content: ChapterContent; settings: ChapterSettings; title?: string } | { error: string } {
   const arr = (x: unknown) => (Array.isArray(x) ? x : []);
+  const sec = sectionMapper(out);
   const content: ChapterContent = {
     summary: String(out?.summary ?? "").slice(0, 600),
+    sections: sec.sections,
     labels: out?.labels?.front && out?.labels?.back ? { front: String(out.labels.front).slice(0, 30), back: String(out.labels.back).slice(0, 30) } : undefined,
     terms: arr(out?.terms).filter((t: any) => t?.term && t?.definition).slice(0, 300)
-      .map((t: any) => ({ id: uid(), term: String(t.term).slice(0, 200), definition: String(t.definition).slice(0, 1000) })),
+      .map((t: any) => ({ id: uid(), term: String(t.term).slice(0, 200), definition: String(t.definition).slice(0, 1000), section: sec.of(t) })),
     questions: arr(out?.questions)
       .filter((q: any) => Array.isArray(q?.choices) && q.choices.length >= 2 && Number(q.answer) >= 0 && Number(q.answer) < q.choices.length).slice(0, 300)
       .map((q: any) => ({ id: uid(), prompt: String(q.prompt).slice(0, 1000), choices: q.choices.slice(0, 6).map((c: unknown) => String(c).slice(0, 300)),
-        answer: Number(q.answer), explanation: String(q.explanation ?? "").slice(0, 1000) })),
+        answer: Number(q.answer), explanation: String(q.explanation ?? "").slice(0, 1000), section: sec.of(q) })),
     entries: arr(out?.entries).filter((e: any) => Array.isArray(e?.lines)).slice(0, 100)
       .map((e: any) => ({ id: uid(), scenario: String(e.scenario ?? "").slice(0, 1000), explanation: String(e.explanation ?? "").slice(0, 1000),
-        lines: e.lines.slice(0, 12).map((l: any) => ({ account: String(l.account ?? ""), debit: Number(l.debit) || 0, credit: Number(l.credit) || 0 })) })),
+        lines: e.lines.slice(0, 12).map((l: any) => ({ account: String(l.account ?? ""), debit: Number(l.debit) || 0, credit: Number(l.credit) || 0 })), section: sec.of(e) })),
     map: null,
   };
   const m = out?.map;
   if (m && (m.region === "us-states" || m.region === "world") && Array.isArray(m.items)) {
     const names = new Map((MAP_NAMES[m.region as "us-states" | "world"] as readonly string[]).map((n) => [n.toLowerCase(), n]));
-    const items = m.items.map((it: any) => ({ id: uid(), place: names.get(String(it?.place ?? "").trim().toLowerCase()) ?? "", prompt: String(it?.prompt ?? "").trim().slice(0, 200) }))
+    const items = m.items.map((it: any) => ({ id: uid(), place: names.get(String(it?.place ?? "").trim().toLowerCase()) ?? "", prompt: String(it?.prompt ?? "").trim().slice(0, 200), section: sec.of(it) }))
       .filter((it: { place: string; prompt: string }) => it.place && it.prompt);
     if (items.length) content.map = { region: m.region, ask: String(m.ask || "Find").slice(0, 120), items };
   }

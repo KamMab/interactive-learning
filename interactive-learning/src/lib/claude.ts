@@ -4,6 +4,7 @@ import mammoth from "mammoth";
 import { admin } from "./db";
 import { uid } from "./id";
 import { MAP_NAMES } from "./map-names";
+import { sectionMapper } from "./import-format";
 import {
   MODES,
   normalizeSettings,
@@ -64,12 +65,17 @@ const studySetTool: Anthropic.Messages.Tool = {
   input_schema: {
     type: "object",
     properties: {
-      summary: { type: "string", description: "2-4 sentence overview of the chapter for students." },
+      summary: { type: "string", description: "1-2 short sentences: what this chapter covers." },
+      sections: {
+        type: "array",
+        description: "Only for long material (several distinct topics, or more than ~30 terms and questions): 2-8 section titles in the order they're taught. Every item then gets a section number. Omit for short sets.",
+        items: { type: "string" },
+      },
       terms: {
         type: "array",
         items: {
           type: "object",
-          properties: { term: { type: "string" }, definition: { type: "string" } },
+          properties: { term: { type: "string" }, definition: { type: "string" }, section: { type: "integer", description: "1-based section number, when sections are used" } },
           required: ["term", "definition"],
         },
       },
@@ -83,6 +89,7 @@ const studySetTool: Anthropic.Messages.Tool = {
             answer: { type: "integer", description: "0-based index of the correct choice" },
             explanation: { type: "string" },
             difficulty: { type: "string", enum: ["easy", "medium", "hard"] },
+            section: { type: "integer", description: "1-based section number, when sections are used" },
           },
           required: ["prompt", "choices", "answer", "explanation"],
         },
@@ -107,6 +114,7 @@ const studySetTool: Anthropic.Messages.Tool = {
               },
             },
             explanation: { type: "string" },
+            section: { type: "integer" },
           },
           required: ["scenario", "lines", "explanation"],
         },
@@ -144,6 +152,7 @@ const studySetTool: Anthropic.Messages.Tool = {
               properties: {
                 place: { type: "string", description: "Exact place name from the list for that region." },
                 prompt: { type: "string", description: "What the student is shown, e.g. 'Sacramento' or 'California'." },
+                section: { type: "integer" },
               },
               required: ["place", "prompt"],
             },
@@ -171,6 +180,7 @@ Shape the set to the subject instead of forcing one format:
 - questions are multiple choice with one right answer.
 - entries are accounting journal entries only; leave the list empty for every other subject.
 - map is for geography only: places that are US states or world countries. Use the exact place names listed below.
+- sections: when the material is long (several distinct topics, or more than about 30 terms and questions), split it into 2-8 sections in the order it's taught and tag every item with its section number, so students can study one section at a time. Cover every section: about 8-15 terms and 5-10 questions each. Skip sections for short material.
 - modes: choose and order the study modes that suit this material.
   learn = adaptive rounds over terms and questions (good default first), flashcards = flip cards, quiz = timed multiple choice,
   map = click places on a map, entries = journal entries, match = pair the two sides of terms, rush = rapid-fire questions.
@@ -246,21 +256,24 @@ export async function generateStudySet(input: GenerateInput): Promise<GenerateRe
   if (!call || call.type !== "tool_use") throw new Error("Claude didn't return a study set. Try again.");
   const out = call.input as any;
 
+  const sec = sectionMapper(out);
   const fresh: ChapterContent = {
     summary: out.summary ?? "",
-    terms: (out.terms ?? []).map((t: any) => ({ id: uid(), term: t.term, definition: t.definition })),
+    sections: sec.sections,
+    terms: (out.terms ?? []).map((t: any) => ({ id: uid(), term: t.term, definition: t.definition, section: sec.of(t) })),
     questions: (out.questions ?? [])
       .filter((q: any) => Array.isArray(q.choices) && q.answer >= 0 && q.answer < q.choices.length)
-      .map((q: any) => ({ id: uid(), ...q })),
-    entries: (out.entries ?? []).map((e: any) => ({ id: uid(), ...e })),
+      .map((q: any) => ({ id: uid(), prompt: q.prompt, choices: q.choices, answer: q.answer, explanation: q.explanation ?? "", difficulty: q.difficulty, section: sec.of(q) })),
+    entries: (out.entries ?? []).map((e: any) => ({ id: uid(), scenario: e.scenario, lines: e.lines ?? [], explanation: e.explanation ?? "", section: sec.of(e) })),
     labels: out.labels?.front && out.labels?.back ? { front: String(out.labels.front), back: String(out.labels.back) } : undefined,
-    map: cleanMap(out.map),
+    map: cleanMap(out.map, sec.of),
   };
 
   const merged: ChapterContent =
     mode === "add"
       ? {
           summary: chapter.content.summary || fresh.summary,
+          sections: [...(chapter.content.sections ?? []), ...(fresh.sections ?? [])].length ? [...(chapter.content.sections ?? []), ...(fresh.sections ?? [])] : undefined,
           terms: [...chapter.content.terms, ...fresh.terms],
           questions: [...chapter.content.questions, ...fresh.questions],
           entries: [...chapter.content.entries, ...fresh.entries],
@@ -286,17 +299,19 @@ export async function generateStudySet(input: GenerateInput): Promise<GenerateRe
 }
 
 /** Keeps only map items whose place is on the map (case-insensitive), with the map's own spelling. */
-function cleanMap(m: any): MapSet | null {
+function cleanMap(m: any, sectionOf: (it: any) => string | undefined = () => undefined): MapSet | null {
   if (!m || (m.region !== "us-states" && m.region !== "world") || !Array.isArray(m.items)) return null;
   const names = new Map((MAP_NAMES[m.region as MapRegion] as readonly string[]).map((n) => [n.toLowerCase(), n]));
   const items = m.items
-    .map((it: any) => ({ id: uid(), place: names.get(String(it.place ?? "").trim().toLowerCase()) ?? "", prompt: String(it.prompt ?? "").trim() }))
+    .map((it: any) => ({ id: uid(), place: names.get(String(it.place ?? "").trim().toLowerCase()) ?? "", prompt: String(it.prompt ?? "").trim(), section: sectionOf(it) }))
     .filter((it: { place: string; prompt: string }) => it.place && it.prompt);
   return items.length ? { region: m.region, ask: String(m.ask || "Find"), items } : null;
 }
 
 function stripIds(c: ChapterContent) {
-  const drop = ({ id, ...rest }: any) => rest;
-  return { summary: c.summary, labels: c.labels, terms: c.terms.map(drop), questions: c.questions.map(drop), entries: c.entries.map(drop),
+  // Sections go to Claude as titles plus 1-based numbers on each item, the same shape it writes.
+  const num = new Map((c.sections ?? []).map((s, i) => [s.id, i + 1]));
+  const drop = ({ id, section, ...rest }: any) => (section && num.has(section) ? { ...rest, section: num.get(section) } : rest);
+  return { summary: c.summary, sections: c.sections?.map((s) => s.title), labels: c.labels, terms: c.terms.map(drop), questions: c.questions.map(drop), entries: c.entries.map(drop),
     map: c.map ? { ...c.map, items: c.map.items.map(drop) } : undefined };
 }

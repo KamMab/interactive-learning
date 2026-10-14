@@ -40,17 +40,23 @@ export const SEED_CHAPTERS: Chapter[] = [
     settings: { ...DEFAULT_SETTINGS },
     content: {
       summary: "Revenue is recorded when earned and expenses when incurred, regardless of when cash moves.",
+      sections: [
+        { id: "sec-accruals", title: "Accruals" },
+        { id: "sec-deferrals", title: "Deferrals" },
+        { id: "sec-principles", title: "Matching and adjusting entries" },
+      ],
       terms: [
-        { id: "t1", term: "Accrued revenue", definition: "Revenue earned but not yet received in cash or recorded." },
-        { id: "t2", term: "Deferred revenue", definition: "Cash received before the revenue is earned; recorded as a liability." },
-        { id: "t3", term: "Accrued expense", definition: "An expense incurred but not yet paid or recorded." },
-        { id: "t4", term: "Prepaid expense", definition: "Cash paid in advance for a future benefit; recorded as an asset." },
-        { id: "t5", term: "Matching principle", definition: "Expenses are recognized in the same period as the revenue they help generate." },
-        { id: "t6", term: "Adjusting entry", definition: "An end-of-period entry that updates accounts to reflect accruals and deferrals." },
+        { id: "t1", section: "sec-accruals", term: "Accrued revenue", definition: "Revenue earned but not yet received in cash or recorded." },
+        { id: "t2", section: "sec-deferrals", term: "Deferred revenue", definition: "Cash received before the revenue is earned; recorded as a liability." },
+        { id: "t3", section: "sec-accruals", term: "Accrued expense", definition: "An expense incurred but not yet paid or recorded." },
+        { id: "t4", section: "sec-deferrals", term: "Prepaid expense", definition: "Cash paid in advance for a future benefit; recorded as an asset." },
+        { id: "t5", section: "sec-principles", term: "Matching principle", definition: "Expenses are recognized in the same period as the revenue they help generate." },
+        { id: "t6", section: "sec-principles", term: "Adjusting entry", definition: "An end-of-period entry that updates accounts to reflect accruals and deferrals." },
       ],
       questions: [
         {
           id: "q1",
+          section: "sec-deferrals",
           prompt: "A company receives $1,200 on Dec 1 for 12 months of service starting that day. How much revenue is recognized by Dec 31?",
           choices: ["$0", "$100", "$1,100", "$1,200"],
           answer: 1,
@@ -58,6 +64,7 @@ export const SEED_CHAPTERS: Chapter[] = [
         },
         {
           id: "q2",
+          section: "sec-deferrals",
           prompt: "Unearned (deferred) revenue is reported as a:",
           choices: ["Revenue", "Asset", "Liability", "Equity"],
           answer: 2,
@@ -65,6 +72,7 @@ export const SEED_CHAPTERS: Chapter[] = [
         },
         {
           id: "q3",
+          section: "sec-accruals",
           prompt: "Which adjusting entry records wages earned by employees but unpaid at year-end?",
           choices: [
             "Dr Wages Payable, Cr Cash",
@@ -77,6 +85,7 @@ export const SEED_CHAPTERS: Chapter[] = [
         },
         {
           id: "q4",
+          section: "sec-accruals",
           prompt: "Failing to record accrued interest revenue will cause net income to be:",
           choices: ["Overstated", "Understated", "Unaffected", "Overstated, then corrected automatically"],
           answer: 1,
@@ -86,6 +95,7 @@ export const SEED_CHAPTERS: Chapter[] = [
       entries: [
         {
           id: "e1",
+          section: "sec-accruals",
           scenario: "On Dec 31, $500 of interest has been earned on a note receivable but not yet collected.",
           lines: [
             { account: "Interest Receivable", debit: 500, credit: 0 },
@@ -95,6 +105,7 @@ export const SEED_CHAPTERS: Chapter[] = [
         },
         {
           id: "e2",
+          section: "sec-deferrals",
           scenario: "On Jan 1, the company pays $2,400 cash for a one-year insurance policy.",
           lines: [
             { account: "Prepaid Insurance", debit: 2400, credit: 0 },
