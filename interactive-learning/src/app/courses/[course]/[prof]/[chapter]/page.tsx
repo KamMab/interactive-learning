@@ -4,6 +4,7 @@ import { isAdmin } from "@/lib/admin-auth";
 import { notFound } from "next/navigation";
 import { getCourseBySlug, getProfessorBySlug, getProfile, listChapters } from "@/lib/db";
 import ChapterStudy from "@/components/ChapterStudy";
+import { chapterLabel } from "@/lib/types";
 import Summary from "@/components/Summary";
 
 export const dynamic = "force-dynamic";
@@ -31,13 +32,14 @@ export default async function ChapterPage({
   const who = teacher ? ` · ${teacher}` : "";
   const author = course.owner_id ? await getProfile(course.owner_id) : null;
   const fun = course.kind === "fun";
+  const shown = chapterLabel(chapter);
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <Link href={`/courses/${course.slug}`} className="link">{fun ? course.title : course.code}{author ? ` by ${author.display_name}` : ""}</Link>
-        <span className="eyebrow mt-4 block">{fun ? `For fun · ${course.title}` : `${course.code} · Chapter ${chapter.number}`}</span>
-        <h1 className="big mt-2">{chapter.title}</h1>
+        <span className="eyebrow mt-4 block">{fun ? `For fun · ${course.title}` : `${course.code} · Chapter ${shown.num}`}</span>
+        <h1 className="big mt-2">{fun ? chapter.title : shown.title}</h1>
         {!fun && teacher && <p className="mt-2 text-[18px] font-bold">{teacher}&apos;s notes</p>}
         <p className="mt-2 text-sm text-muted">
           {course.owner_id
@@ -48,7 +50,7 @@ export default async function ChapterPage({
         </p>
         {chapter.content.summary && <Summary text={chapter.content.summary} />}
       </div>
-      <ChapterStudy chapter={chapter} label={`${course.code}${who} · Ch. ${chapter.number} ${chapter.title}`}
+      <ChapterStudy chapter={chapter} label={`${course.code}${who} · Ch. ${shown.num} ${shown.title}`}
         initialMode={typeof sp.mode === "string" ? sp.mode : undefined}
         initialSection={typeof sp.section === "string" ? sp.section : undefined} />
     </div>

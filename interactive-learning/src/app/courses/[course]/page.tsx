@@ -4,7 +4,7 @@ import { isAdmin } from "@/lib/admin-auth";
 import { notFound } from "next/navigation";
 import { adminListChapters, getCourseBySlug, getProfile, listChapters, listProfessors, otherVersions } from "@/lib/db";
 import { AUTH_ENABLED, hasSupabase } from "@/lib/config";
-import { ALL_PROFS, usableSections } from "@/lib/types";
+import { ALL_PROFS, chapterLabel, usableSections } from "@/lib/types";
 import CourseShelf from "@/components/CourseShelf";
 import CourseEditor from "@/components/CourseEditor";
 
@@ -61,14 +61,14 @@ export default async function CoursePage({ params }: { params: Promise<{ course:
       )}
 
       <div className="shelf">
-        {chapters.map((ch) => {
+        {[...chapters].sort((a, b) => (fun ? a.number - b.number : chapterLabel(a).num - chapterLabel(b).num)).map((ch) => {
           const secs = usableSections(ch.content).length;
           const href = `/courses/${course.slug}/${ch.professor_id ? profSlug.get(ch.professor_id) ?? ALL_PROFS : ALL_PROFS}/${ch.number}`;
           return (
             <Link key={ch.id} href={href} className="book">
               {fun
                 ? <div className="book-cover fun"><span className="eyebrow">Game</span><span className="ttl text-[24px]">{ch.title}</span></div>
-                : <div className="book-cover"><span className="eyebrow">Chapter</span><span className="num">{ch.number}</span><span className="ttl">{ch.title}</span></div>}
+                : <div className="book-cover"><span className="eyebrow">Chapter</span><span className="num">{chapterLabel(ch).num}</span><span className="ttl">{chapterLabel(ch).title}</span></div>}
               <div className="book-body">
                 {ch.content.map?.items.length ? <><b>{ch.content.map.items.length}</b> places · </> : null}
                 <b>{ch.content.terms.length}</b> {fun ? "cards" : "terms"} · <b>{ch.content.questions.length}</b> questions

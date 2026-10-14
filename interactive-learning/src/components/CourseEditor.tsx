@@ -7,16 +7,15 @@ type C = { id: string; kind: "class" | "fun"; code: string; title: string; profe
 type Ch = { id: string; number: number; title: string };
 
 function ChapterRow({ ch, fun, onDone }: { ch: Ch; fun: boolean; onDone: (msg: string) => void }) {
-  const [title, setTitle] = useState(ch.title), [num, setNum] = useState(ch.number);
+  const [title, setTitle] = useState(ch.title);
   const [busy, setBusy] = useState(false), [confirm, setConfirm] = useState(false), [err, setErr] = useState("");
-  const dirty = title.trim() !== ch.title || num !== ch.number;
+  const dirty = title.trim() !== ch.title;
   return (
     <li className="edit-row">
-      {!fun && <input className="input w-[72px] flex-none" type="number" min={1} value={num} onChange={(e) => setNum(Number(e.target.value))} aria-label="Chapter number" />}
       <input className="input min-w-0 flex-1" value={title} onChange={(e) => setTitle(e.target.value)} aria-label={fun ? "Game name" : "Chapter name"} />
       <button type="button" className="btn-ghost" disabled={!dirty || busy} onClick={async () => {
         setBusy(true); setErr("");
-        const r = await updateMyChapter(ch.id, { title, number: fun ? ch.number : num });
+        const r = await updateMyChapter(ch.id, { title });
         setBusy(false);
         if (r.error) setErr(r.error); else onDone("Saved.");
       }}>Save</button>
@@ -63,7 +62,7 @@ export default function CourseEditor({ course, chapters }: { course: C; chapters
         <ul className="flex list-none flex-col gap-2 p-0">
           {chapters.map((ch) => <ChapterRow key={ch.id + ch.number + ch.title} ch={ch} fun={fun} onDone={done} />)}
         </ul>
-        <p className="text-[13px] text-muted">Deleting {fun ? "a game" : "a chapter"} also deletes the notes uploaded for it. Deleting the last one removes the whole {fun ? "category" : "course"}.</p>
+        <p className="text-[13px] text-muted">{fun ? "" : "Start a name with the chapter number (\u201cCh. 13 …\u201d) to set its number and order. "}Deleting {fun ? "a game" : "a chapter"} also deletes the notes uploaded for it. Deleting the last one removes the whole {fun ? "category" : "course"}.</p>
       </div>
       {msg && <p className={`text-sm ${msg.ok ? "text-good" : "text-bad"}`}>{msg.text}</p>}
     </section>

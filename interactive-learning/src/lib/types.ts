@@ -189,3 +189,13 @@ export function normalizeContent(c: Partial<ChapterContent> | null | undefined):
     map: c?.map?.items?.length ? c.map : null,
   };
 }
+
+/**
+ * What a chapter is called on screen. A title like "Ch. 13 Current Liabilities" shows as number 13 with the
+ * title "Current Liabilities", even if it was saved under another number.
+ */
+export function chapterLabel(ch: { number: number; title: string }) {
+  const m = ch.title.match(/^\s*(?:ch(?:apter)?|unit|week|lecture|module)\.?\s*(\d{1,3})\s*[:.\-–—]?\s*(.*)$/i);
+  if (!m) return { num: ch.number, title: ch.title };
+  return { num: Number(m[1]), title: m[2].trim() || ch.title };
+}

@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { SUPABASE_URL, hasSupabase } from "./config";
 import { SEED_AUTHOR, SEED_CHAPTERS, SEED_COURSES, SEED_FUN_COURSE, SEED_PROFESSORS } from "./seed";
 import { demoFunCards } from "./demo-cards";
-import { ALL_PROFS, normalizeContent, normalizeSettings, type Chapter, type Course, type Note, type Professor, type Profile, type SetCard, type CourseCard } from "./types";
+import { ALL_PROFS, normalizeContent, normalizeSettings, type Chapter, type Course, type Note, type Professor, type Profile, type SetCard, type CourseCard, chapterLabel } from "./types";
 
 let client: SupabaseClient | null = null;
 
@@ -182,8 +182,8 @@ async function cardsFor(courses: Course[], plays?: Map<string, number>, onlyChap
       return {
         chapterId: ch.id,
         href: `/courses/${c.slug}/${ch.professor_id ? profSlug.get(ch.professor_id) ?? ALL_PROFS : ALL_PROFS}/${ch.number}`,
-        title: ch.title || c.title,
-        course: c.kind === "fun" ? c.title : `${c.code} · Ch. ${ch.number}`,
+        title: c.kind === "fun" ? ch.title || c.title : chapterLabel(ch).title,
+        course: c.kind === "fun" ? c.title : `${c.code} · Ch. ${chapterLabel(ch).num}`,
         kind: c.owner_id ? (c.kind ?? "class") : "official",
         terms: content.terms.length, questions: content.questions.length,
         author: c.owner_id ? author.get(c.owner_id) ?? null : null,

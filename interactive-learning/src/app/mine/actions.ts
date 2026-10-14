@@ -66,16 +66,18 @@ export async function updateMyCourse(courseId: string, input: { code?: string; t
 }
 
 /** The owner renames or renumbers one of their chapters (or games). */
-export async function updateMyChapter(chapterId: string, input: { title: string; number: number }) {
+export async function updateMyChapter(chapterId: string, input: { title: string }) {
   const user = await currentUser();
   if (!user) return { error: "Sign in first." };
   if (!(await ownsChapter(user.id, chapterId))) return { error: "That chapter wasn't found." };
   const title = input.title.trim().replace(/\s+/g, " ").slice(0, 120);
-  const number = Math.floor(Number(input.number));
   if (title.length < 1) return { error: "Give it a name." };
-  if (!(number >= 1 && number < 1000)) return { error: "Use a number from 1 to 999." };
-  const { error } = await admin().from("chapters").update({ title, number }).eq("id", chapterId);
-  if (error) return { error: error.message.includes("chapters_course_prof_number") ? `Chapter ${number} already exists in this course.` : error.message };
+  // "Ch. 13 …" also sets the chapter's number (its order and web address).
+  const m = title.match(/^\s*(?:ch(?:apter)?|unit|week|lecture|module)\.?\s*(\d{1,3})\b/i);
+  const patch: Record<string, unknown> = { title };
+  if (m && Number(m[1]) >= 1) patch.number = Number(m[1]);
+  const { error } = await admin().from("chapters").update(patch).eq("id", chapterId);
+  if (error) return { error: error.message.includes("chapters_course_prof_number") ? `Chapter ${patch.number} already exists in this course.` : error.message };
   revalidatePath("/", "layout");
   return { ok: true };
 }
