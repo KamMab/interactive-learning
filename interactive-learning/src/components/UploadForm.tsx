@@ -8,11 +8,14 @@ import type { Mode } from "@/lib/types";
 
 type Phase = "idle" | "uploading" | "building" | "error";
 type Picked = { file: File; on: boolean };
-export type MyCourse = { id: string; code: string; title: string; professor?: string | null; chapters: number };
-export type UploadPreset = { courseId?: string; newCourse?: boolean; code?: string; title?: string };
+export type MyCourse = { id: string; kind: "class" | "fun"; code: string; title: string; professor?: string | null; chapters: number };
+export type UploadPreset = { courseId?: string; newCourse?: boolean; code?: string; title?: string; fun?: boolean };
 
 const baseName = (n: string) => n.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
 const kb = (n: number) => (n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1e3))} KB`);
+
+/** Same rule as the server: "Ch. 3 …" carries its own chapter number. */
+const numberInTitle = (t: string) => /\b(?:ch(?:apter)?|unit|week|lecture|module)\.?\s*\d{1,3}\b/i.test(t);
 
 // Optional extra ways to study (Learn, Flashcards and Quick-fire are always included).
 const EXTRAS: { mode: Mode; name: string; hint: string }[] = [
@@ -26,20 +29,24 @@ export default function UploadForm({ myCourses, knownCodes, authorName, preset }
   myCourses: MyCourse[]; knownCodes: { code: string; title: string }[]; authorName: string; preset?: UploadPreset;
 }) {
   const router = useRouter();
-  const [purpose, setPurpose] = useState<"class" | "fun">("class");
-  const [where, setWhere] = useState<"mine" | "new">(preset?.newCourse || !myCourses.length ? "new" : "mine");
-  const [courseId, setCourseId] = useState(preset?.courseId && myCourses.some((c) => c.id === preset.courseId) ? preset.courseId : myCourses[0]?.id ?? "");
+  const [purpose, setPurpose] = useState<"class" | "fun">(preset?.fun ? "fun" : "class");
+  // "" = make a new course (or category); otherwise the id of one of the student's own.
+  const firstOf = (k: "class" | "fun") => myCourses.find((c) => c.kind === k)?.id ?? "";
+  const [courseId, setCourseId] = useState(
+    preset?.courseId && myCourses.some((c) => c.id === preset.courseId) ? preset.courseId : preset?.newCourse ? "" : firstOf(preset?.fun ? "fun" : "class"));
   const [code, setCode] = useState(preset?.code ?? ""), [courseTitle, setCourseTitle] = useState(preset?.title ?? ""), [professor, setProfessor] = useState("");
   const [title, setTitle] = useState(""), [chapterTitle, setChapterTitle] = useState("");
   const [how, setHow] = useState<"build" | "paste">("build");
   const [more, setMore] = useState(false), [number, setNumber] = useState(0), [focus, setFocus] = useState("");
   const [idea, setIdea] = useState(""), [picked, setPicked] = useState<Picked[]>([]), [separate, setSeparate] = useState(false), [step, setStep] = useState(""), [pasted, setPasted] = useState("");
-  const [extras, setExtras] = useState<Mode[]>([]), [studyIdea, setStudyIdea] = useState("");
+  const [extras, setExtras] = useState<Mode[]>([]), [studyIdea, setStudyIdea] = useState(""), [other, setOther] = useState(false);
   const [share, setShare] = useState(true);
   const [phase, setPhase] = useState<Phase>("idle"), [msg, setMsg] = useState(""), [copied, setCopied] = useState(false);
 
   const fun = purpose === "fun";
-  const useMine = !fun && where === "mine" && !!courseId;
+  const choices = myCourses.filter((c) => c.kind === purpose);
+  const useMine = !!courseId && choices.some((c) => c.id === courseId);
+  const switchPurpose = (p: "class" | "fun") => { setPurpose(p); setCourseId(myCourses.find((c) => c.kind === p)?.id ?? ""); };
   const myCourse = myCourses.find((c) => c.id === courseId);
   const files = picked.filter((p) => p.on).map((p) => p.file);
   const addFiles = (list: FileList | null) => {
@@ -49,7 +56,7 @@ export default function UploadForm({ myCourses, knownCodes, authorName, preset }
   const known = knownCodes.find((c) => c.code.toLowerCase() === code.trim().toLowerCase());
   const mineSameCode = !useMine && myCourses.find((c) => c.code.toLowerCase() === code.trim().toLowerCase());
   const check = how === "paste" && pasted.trim() ? parseImport(pasted) : null;
-  const topic = fun ? title : [useMine ? myCourse?.code : code, chapterTitle].filter(Boolean).join(" ");
+  const topic = fun ? [useMine ? myCourse?.title : title, chapterTitle].filter(Boolean).join(": ") : [useMine ? myCourse?.code : code, chapterTitle].filter(Boolean).join(" ");
   const toggle = (m: Mode) => setExtras((xs) => (xs.includes(m) ? xs.filter((x) => x !== m) : [...xs, m]));
 
   const meta = (list: File[] = files, over: { title?: string; number?: number; chapterTitle?: string } = {}) => ({
@@ -58,7 +65,7 @@ export default function UploadForm({ myCourses, knownCodes, authorName, preset }
     code: useMine ? "" : code, title: over.title ?? (fun ? title : courseTitle || known?.title || ""), professor,
     number: over.number ?? number, chapterTitle: over.chapterTitle ?? chapterTitle, instructions: focus,
     files: list.map((f) => ({ name: f.name, type: f.type, size: f.size })),
-    extras, studyIdea,
+    extras, studyIdea: other ? studyIdea : "",
   });
 
   async function copy() {
@@ -79,8 +86,8 @@ export default function UploadForm({ myCourses, knownCodes, authorName, preset }
     }
     // One set from every chosen file, or (when asked) a separate set for each file.
     const jobs = separate && files.length > 1
-      ? files.map((f, i) => ({ list: [f], over: fun ? { title: `${title.trim()}: ${baseName(f.name)}` } : { number: number ? number + i : 0, chapterTitle: baseName(f.name) } }))
-      : [{ list: files, over: {} }];
+      ? files.map((f, i) => ({ list: [f], over: (fun ? { chapterTitle: baseName(f.name) } : { number: number ? number + i : 0, chapterTitle: baseName(f.name) }) as { number?: number; chapterTitle?: string } }))
+      : [{ list: files, over: {} as { number?: number; chapterTitle?: string } }];
     let last = "";
     for (let j = 0; j < jobs.length; j++) {
       const { list, over } = jobs[j];
@@ -97,7 +104,7 @@ export default function UploadForm({ myCourses, knownCodes, authorName, preset }
         done.push({ name: f.name, path: slot.path, mime: f.type, size: f.size });
       }
       setPhase("building");
-      const fin = await finishUpload(start.uploadId, done, { extras, studyIdea });
+      const fin = await finishUpload(start.uploadId, done, { extras, studyIdea: other ? studyIdea : "", autoNumber: !fun && !(over.number ?? number) && !numberInTitle(over.chapterTitle ?? chapterTitle) });
       if ("error" in fin) { setPhase("error"); setMsg((fin.error ?? "Claude couldn't build it.") + (j ? `\n${j} of ${jobs.length} sets were made. See Your chapters.` : "")); return; }
       last = fin.href;
     }
@@ -105,52 +112,52 @@ export default function UploadForm({ myCourses, knownCodes, authorName, preset }
   }
 
   const busy = phase === "uploading" || phase === "building";
-  const courseReady = fun ? !!title.trim() : useMine || !!code.trim();
+  const courseReady = useMine || (fun ? !!title.trim() : !!code.trim());
   const ready = courseReady && (how === "paste" ? check && !("error" in check) : files.length || idea.trim() || (!fun && chapterTitle.trim()));
 
   return (
     <form onSubmit={submit} className="card flex flex-col gap-7 p-[22px]">
       <fieldset><legend className="label">1. What is it for?</legend>
-        <div className="seg max-w-md"><button type="button" aria-pressed={!fun} onClick={() => setPurpose("class")}>For class</button><button type="button" aria-pressed={fun} onClick={() => setPurpose("fun")}>For fun</button></div>
+        <div className="seg max-w-md"><button type="button" aria-pressed={!fun} onClick={() => switchPurpose("class")}>For class</button><button type="button" aria-pressed={fun} onClick={() => switchPurpose("fun")}>For fun</button></div>
       </fieldset>
 
-      {fun ? (
-        <fieldset className="flex flex-col gap-2"><legend className="label">2. Name your game</legend>
-          <input id="u-title" className="input max-w-md" placeholder="US State Capitals" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Game name" />
-        </fieldset>
-      ) : (
-        <fieldset className="flex flex-col gap-3"><legend className="label">2. Which course?</legend>
-          <div className="seg max-w-md">
-            <button type="button" aria-pressed={where === "mine"} disabled={!myCourses.length} onClick={() => setWhere("mine")} title={myCourses.length ? "" : "You haven't made a course yet"}>Add to my course</button>
-            <button type="button" aria-pressed={where === "new"} onClick={() => setWhere("new")}>Create a new course</button>
+      <fieldset className="flex flex-col gap-3"><legend className="label">2. {fun ? "Which category?" : "Which course?"}</legend>
+        <div className="picks" role="radiogroup" aria-label={fun ? "Category" : "Course"}>
+          {choices.map((c) => (
+            <button key={c.id} type="button" role="radio" className="pick" aria-checked={courseId === c.id} aria-pressed={courseId === c.id} onClick={() => setCourseId(c.id)}>
+              <span className="pick-code">{fun ? c.title : c.code}</span>
+              {!fun && <span className="pick-ttl">{c.title}</span>}
+              <span className="pick-meta">{c.chapters} {fun ? (c.chapters === 1 ? "game" : "games") : (c.chapters === 1 ? "chapter" : "chapters")}{c.professor ? ` · ${c.professor}` : ""}</span>
+            </button>
+          ))}
+          <button type="button" role="radio" className="pick add" aria-checked={!useMine} aria-pressed={!useMine} onClick={() => setCourseId("")}>
+            + New {fun ? "category" : "course"}
+          </button>
+        </div>
+        {!useMine && (fun ? (
+          <div className="max-w-md">
+            <label className="label" htmlFor="u-title">Category name</label>
+            <input id="u-title" className="input" placeholder="US States" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <p className="mt-1 text-[13px] text-muted">A category holds several games, like US States → capitals, flags, locations.</p>
           </div>
-          {where === "mine" && myCourses.length > 0 ? (
-            <div className="max-w-md">
-              <label className="label" htmlFor="u-course">Your course</label>
-              <select id="u-course" className="input" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
-                {myCourses.map((c) => <option key={c.id} value={c.id}>{c.code} · {c.title} ({c.chapters} chapter{c.chapters === 1 ? "" : "s"})</option>)}
-              </select>
+        ) : (
+          <>
+            <div className="grid gap-3 sm:grid-cols-[160px_1fr_1fr]">
+              <div><label className="label" htmlFor="u-code">Course code</label><input id="u-code" className="input" placeholder="MATH 1" autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} /></div>
+              <div><label className="label" htmlFor="u-ct">Course name</label><input id="u-ct" className="input" placeholder={known?.title || "Calculus"} value={courseTitle} onChange={(e) => setCourseTitle(e.target.value)} /></div>
+              <div><label className="label" htmlFor="u-prof">Professor</label><input id="u-prof" className="input" placeholder="Prof. Lee" value={professor} onChange={(e) => setProfessor(e.target.value)} /></div>
             </div>
-          ) : (
-            <>
-              <datalist id="course-codes">{knownCodes.map((c) => <option key={c.code} value={c.code}>{c.title}</option>)}</datalist>
-              <div className="grid gap-3 sm:grid-cols-[160px_1fr_1fr]">
-                <div><label className="label" htmlFor="u-code">Course code</label><input id="u-code" list="course-codes" className="input" placeholder="MATH 1" value={code} onChange={(e) => setCode(e.target.value)} /></div>
-                <div><label className="label" htmlFor="u-ct">Course name</label><input id="u-ct" className="input" placeholder={known?.title || "Calculus"} value={courseTitle} onChange={(e) => setCourseTitle(e.target.value)} /></div>
-                <div><label className="label" htmlFor="u-prof">Professor (optional)</label><input id="u-prof" className="input" placeholder="Prof. Lee" value={professor} onChange={(e) => setProfessor(e.target.value)} /></div>
-              </div>
-              {mineSameCode
-                ? <p className="text-[13px] text-muted">You already have {mineSameCode.code}, so this chapter will be added to it.</p>
-                : <p className="text-[13px] text-muted">This becomes your own version, shown as &ldquo;{code.trim().toUpperCase() || "MATH 1"} by {authorName}&rdquo;. Other people&apos;s versions of the same course aren&apos;t changed.</p>}
-            </>
-          )}
-          <div>
-            <label className="label" htmlFor="u-ch">Chapter</label>
-            <input id="u-ch" className="input" placeholder="Ch. 3 Derivatives" value={chapterTitle} onChange={(e) => setChapterTitle(e.target.value)} />
-            <p className="mt-1 text-[13px] text-muted">The chapter number comes from the name (&ldquo;Ch. 3&rdquo;), or it&apos;s added after your last chapter.</p>
-          </div>
-        </fieldset>
-      )}
+            {mineSameCode
+              ? <p className="text-[13px] text-muted">You already have {mineSameCode.code}, so this chapter will be added to it.</p>
+              : <p className="text-[13px] text-muted">Shown as &ldquo;{code.trim().toUpperCase() || "MATH 1"} by {authorName}&rdquo;{professor.trim() ? ` · ${professor.trim()}` : ""}. Adding the professor tells students whose notes they&apos;re studying.</p>}
+          </>
+        ))}
+        <div>
+          <label className="label" htmlFor="u-ch">{fun ? "Name this game" : "Chapter"}</label>
+          <input id="u-ch" className="input" placeholder={fun ? "State capitals" : "Ch. 3 Derivatives"} value={chapterTitle} onChange={(e) => setChapterTitle(e.target.value)} />
+          {!fun && <p className="mt-1 text-[13px] text-muted">Just &ldquo;Ch. 3&rdquo; is fine: the full title is taken from your notes. Without a number, it goes after your last chapter.</p>}
+        </div>
+      </fieldset>
 
       <fieldset className="flex flex-col gap-3"><legend className="label">3. How?</legend>
         <div className="seg max-w-md"><button type="button" aria-pressed={how === "build"} onClick={() => setHow("build")}>Claude builds it</button><button type="button" aria-pressed={how === "paste"} onClick={() => setHow("paste")}>Paste a quiz</button></div>
@@ -202,14 +209,21 @@ export default function UploadForm({ myCourses, knownCodes, authorName, preset }
         <p className="text-sm text-muted">Every set gets <b className="text-ink">Learn</b>, <b className="text-ink">Flashcards</b> and <b className="text-ink">Quick-fire</b>. Add more if they fit your material{how === "build" ? ", or leave these off and Claude adds what fits" : ""}.</p>
         <div className="flex flex-wrap gap-2">
           {EXTRAS.map((x) => (
-            <button key={x.mode} type="button" className="chip" aria-pressed={extras.includes(x.mode)} onClick={() => toggle(x.mode)} title={x.hint}>
-              {extras.includes(x.mode) ? "✓ " : "+ "}{x.name}
-            </button>
+            <span key={x.mode} className="contents">
+              <button type="button" className="chip" aria-pressed={extras.includes(x.mode)} onClick={() => toggle(x.mode)} title={x.hint}>
+                {extras.includes(x.mode) ? "✓ " : "+ "}{x.name}
+              </button>
+              {x.mode === "rush" && how === "build" && (
+                <button type="button" className="chip" aria-pressed={other} onClick={() => setOther(!other)} title="Describe your own way to study">
+                  {other ? "✓ " : "+ "}Other
+                </button>
+              )}
+            </span>
           ))}
         </div>
-        {how === "build" && (
+        {how === "build" && other && (
           <div>
-            <label className="label" htmlFor="u-studyidea">Another way you&apos;d like to study? (optional)</label>
+            <label className="label" htmlFor="u-studyidea">Describe how you&apos;d like to study it</label>
             <textarea id="u-studyidea" className="input" rows={2} value={studyIdea} onChange={(e) => setStudyIdea(e.target.value)}
               placeholder="e.g. Quiz me on which formula to use for each word problem." />
           </div>

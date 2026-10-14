@@ -165,6 +165,8 @@ const studySetTool: Anthropic.Messages.Tool = {
         description: "Which study modes fit this material best, best first (the first one opens when a student picks the set). Only list modes the set has content for.",
         items: { type: "string", enum: [...MODES] },
       },
+      chapter_title: { type: "string", description: "The chapter's full title as written in the notes (e.g. 'Linear Algebra' from 'Chapter 3: Linear Algebra'), without the chapter number. Empty if the notes don't name it." },
+      chapter_number: { type: "integer", description: "The chapter number printed in the notes, if any." },
       change_note: { type: "string", description: "One or two sentences telling the admin what you produced or changed." },
     },
     required: ["summary", "terms", "questions", "entries", "change_note"],
@@ -203,6 +205,8 @@ export type GenerateInput = {
 
 export type GenerateResult = {
   content: ChapterContent;
+  chapterTitle?: string;
+  chapterNumber?: number;
   settings: ChapterSettings | null;
   changeNote: string;
 };
@@ -295,6 +299,8 @@ export async function generateStudySet(input: GenerateInput): Promise<GenerateRe
     content: merged,
     settings,
     changeNote: out.change_note ?? "",
+    chapterTitle: typeof out.chapter_title === "string" ? out.chapter_title.trim().slice(0, 120) : undefined,
+    chapterNumber: Number.isInteger(out.chapter_number) && out.chapter_number > 0 && out.chapter_number < 1000 ? out.chapter_number : undefined,
   };
 }
 

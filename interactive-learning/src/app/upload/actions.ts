@@ -42,6 +42,9 @@ function studyRequest(meta: UploadMeta) {
   ].filter(Boolean).join("\n");
 }
 
+/** Titles that only say which chapter it is ("Ch. 3", "Chapter 3", "3") or the placeholder we made. */
+const isGenericTitle = (t: string) => /^\s*(?:(?:ch(?:apter)?|unit|week|lecture|module)\.?\s*)?\d{0,3}\s*$/i.test(t);
+
 /** "Ch. 13 Current Liabilities" -> 13. */
 const numberFromTitle = (t: string) => {
   const m = t.match(/\b(?:ch(?:apter)?|unit|week|lecture|module)\.?\s*(\d{1,3})\b/i);
@@ -59,7 +62,7 @@ export async function startUpload(meta: UploadMeta) {
   const fun = meta.purpose === "fun";
   const code = fun ? "FUN" : meta.code.trim().toUpperCase().replace(/\s+/g, " ");
   if (!fun && !meta.courseId && !code) return { error: "Add the course code, like MATH 1." };
-  if (fun && !meta.title.trim()) return { error: "Give your game a name, like US State Capitals." };
+  if (fun && !meta.courseId && !meta.title.trim()) return { error: "Name your category, like US States." };
   if (!meta.files.length && !meta.idea.trim() && !meta.chapterTitle.trim()) return { error: fun ? "Describe what the game should cover, or upload a file." : "Choose at least one file of notes, or describe what to build." };
   if (meta.files.length > MAX_FILES) return { error: `Upload up to ${MAX_FILES} files at a time.` };
   const bad = meta.files.find((f) => !OK_TYPE.test(f.name) || f.size > MAX_BYTES);
@@ -101,10 +104,10 @@ async function ensureChapter(user: Viewer, meta: UploadMeta): Promise<{ c: Cours
   // Class notes go into the student's own version of a course ("MATH 1 by kam"): one they pick, or one per course code.
   // Each for-fun upload is its own set.
   let course = null as Course | null;
-  if (!fun && meta.courseId) {
+  if (meta.courseId) {
     const { data } = await db.from("courses").select("*").eq("id", meta.courseId).eq("owner_id", user.id).maybeSingle();
     course = data as Course | null;
-    if (!course) return { error: "That course wasn't found in your courses." };
+    if (!course || (course.kind === "fun") !== fun) return { error: fun ? "That category wasn't found in your categories." : "That course wasn't found in your courses." };
     if (course.visibility !== visibility) await db.from("courses").update({ visibility }).eq("id", course.id);
   } else if (!fun) {
     const { data } = await db.from("courses").select("*").eq("owner_id", user.id).eq("code", code).eq("kind", "class").maybeSingle();
@@ -116,12 +119,19 @@ async function ensureChapter(user: Viewer, meta: UploadMeta): Promise<{ c: Cours
       if (Object.keys(patch).length) await db.from("courses").update(patch).eq("id", course.id);
     }
   } else {
-    const ins = await db.from("courses").insert({
-      code, kind: "fun", visibility, title: meta.title.trim().slice(0, 80), slug: `${slugify(meta.title)}-${rand()}`,
-      owner_id: user.id, owner_email: user.email, published: true, description: meta.idea.trim().slice(0, 240),
-    }).select("*").single();
-    if (ins.error) return { error: ins.error.message };
-    course = ins.data as Course;
+    // For fun: a category (like "US States") holding several games (capitals, flags, locations…).
+    const name = meta.title.trim().slice(0, 80);
+    const { data } = await db.from("courses").select("*").eq("owner_id", user.id).eq("kind", "fun").ilike("title", name).maybeSingle();
+    course = data as Course | null;
+    if (course && course.visibility !== visibility) await db.from("courses").update({ visibility }).eq("id", course.id);
+    if (!course) {
+      const ins = await db.from("courses").insert({
+        code, kind: "fun", visibility, title: name, slug: `${slugify(name)}-${rand()}`,
+        owner_id: user.id, owner_email: user.email, published: true, description: "",
+      }).select("*").single();
+      if (ins.error) return { error: ins.error.message };
+      course = ins.data as Course;
+    }
   }
   if (!course) {
     const { data: official } = await db.from("courses").select("title").is("owner_id", null).eq("code", code).maybeSingle();
@@ -137,7 +147,7 @@ async function ensureChapter(user: Viewer, meta: UploadMeta): Promise<{ c: Cours
   // Student courses don't split chapters by professor (the professor is a label on the course).
   const professorId: string | null = null;
 
-  let number = fun ? 1 : Number(meta.number) || numberFromTitle(meta.chapterTitle);
+  let number = fun ? 0 : Number(meta.number) || numberFromTitle(meta.chapterTitle);
   if (!number) {
     const { data: last } = await db.from("chapters").select("number").eq("course_id", c.id).order("number", { ascending: false }).limit(1).maybeSingle();
     number = (last?.number ?? 0) + 1;
@@ -148,7 +158,7 @@ async function ensureChapter(user: Viewer, meta: UploadMeta): Promise<{ c: Cours
   let chapterId = ch?.id as string | undefined;
   if (!chapterId) {
     const ins = await db.from("chapters").insert({
-      course_id: c.id, professor_id: professorId, number, title: fun ? c.title : meta.chapterTitle.trim() || `Chapter ${number}`,
+      course_id: c.id, professor_id: professorId, number, title: meta.chapterTitle.trim() || (fun ? meta.idea.trim().slice(0, 60) || c.title : `Chapter ${number}`),
       instructions: [meta.idea.trim() && `What to build: ${meta.idea.trim()}`, meta.instructions.trim()].filter(Boolean).join("\n\n"), settings: DEFAULT_SETTINGS, published: false,
     }).select("id").single();
     if (ins.error) return { error: ins.error.message };
@@ -169,7 +179,7 @@ export async function importSet(meta: UploadMeta, raw: string) {
   if (!user) return { error: "Sign in to upload." };
   const fun = meta.purpose === "fun";
   if (!fun && !meta.courseId && !meta.code.trim()) return { error: "Add the course code, like MATH 1." };
-  if (fun && !meta.title.trim()) return { error: "Give your quiz a name." };
+  if (fun && !meta.courseId && !meta.title.trim()) return { error: "Name your category, like US States." };
   const parsed = parseImport(raw);
   if ("error" in parsed) return { error: parsed.error };
   const db = admin();
@@ -181,7 +191,9 @@ export async function importSet(meta: UploadMeta, raw: string) {
   if ("error" in made) return made;
   const { c, chapterId } = made;
   const settings = { ...parsed.settings, modes: finalModes(parsed.content, meta.extras, parsed.settings.modes) };
-  await db.from("chapters").update({ content: parsed.content, settings, published: true, updated_at: new Date().toISOString() }).eq("id", chapterId);
+  const { data: cur } = await db.from("chapters").select("title").eq("id", chapterId).single();
+  const title = parsed.title && cur && isGenericTitle(cur.title) ? parsed.title.trim().slice(0, 120) : undefined;
+  await db.from("chapters").update({ content: parsed.content, settings, published: true, updated_at: new Date().toISOString(), ...(title ? { title } : {}) }).eq("id", chapterId);
   await db.from("uploads").insert({ user_id: user.id, user_email: user.email, course_id: c.id, chapter_id: chapterId, status: "ready", error: "pasted" });
   const { data: ch } = await db.from("chapters").select("number,professor_id").eq("id", chapterId).single();
   const { data: prof } = ch?.professor_id ? await db.from("professors").select("slug").eq("id", ch.professor_id).single() : { data: null };
@@ -189,7 +201,7 @@ export async function importSet(meta: UploadMeta, raw: string) {
 }
 
 /** Step 2: after the files are in storage, have Claude build (or add to) the chapter's study set. */
-export async function finishUpload(uploadId: string, files: { name: string; path: string; mime: string; size: number }[], study: Pick<UploadMeta, "extras" | "studyIdea"> = {}) {
+export async function finishUpload(uploadId: string, files: { name: string; path: string; mime: string; size: number }[], study: Pick<UploadMeta, "extras" | "studyIdea"> & { autoNumber?: boolean } = {}) {
   const user = await currentUser();
   if (!user) return { error: "Your sign-in expired. Sign in again and retry." };
   const db = admin();
@@ -217,7 +229,14 @@ export async function finishUpload(uploadId: string, files: { name: string; path
       mode: hasContent ? "add" : "replace", allowSettingsChanges: false, chooseModes: true,
     });
     const settings = normalizeSettings({ ...(result.settings ?? chapter.settings), modes: finalModes(result.content, study.extras, result.settings?.modes), v: 2 });
-    await db.from("chapters").update({ content: result.content, settings, published: true, updated_at: new Date().toISOString() }).eq("id", chapter.id);
+    // "Ch. 3" typed by the student + "Chapter 3: Linear Algebra" in the notes -> use the notes' full title.
+    const patch: Record<string, unknown> = { content: result.content, settings, published: true, updated_at: new Date().toISOString() };
+    if (!hasContent && result.chapterTitle && isGenericTitle(chapter.title)) patch.title = result.chapterTitle;
+    await db.from("chapters").update(patch).eq("id", chapter.id);
+    if (!hasContent && study.autoNumber && result.chapterNumber && result.chapterNumber !== chapter.number && (course as Course).kind !== "fun") {
+      const { error } = await db.from("chapters").update({ number: result.chapterNumber }).eq("id", chapter.id);
+      if (!error) chapter.number = result.chapterNumber; // a clash with an existing chapter number just keeps the old one
+    }
     await db.from("uploads").update({ status: "ready" }).eq("id", uploadId);
 
     const { data: prof } = chapter.professor_id ? await db.from("professors").select("slug").eq("id", chapter.professor_id).single() : { data: null };

@@ -42,3 +42,40 @@ export async function deleteMySet(chapterId: string) {
   revalidatePath("/");
   return { ok: true };
 }
+
+/** The owner edits their course (or for-fun category): code, name, professor, who can see it. */
+export async function updateMyCourse(courseId: string, input: { code?: string; title: string; professor?: string; visibility: "public" | "private" }) {
+  const user = await currentUser();
+  if (!user) return { error: "Sign in first." };
+  const db = admin();
+  const { data: c } = await db.from("courses").select("id,owner_id,kind,slug").eq("id", courseId).maybeSingle();
+  if (!c || c.owner_id !== user.id) return { error: "That course wasn't found." };
+  const title = input.title.trim().replace(/\s+/g, " ").slice(0, 80);
+  if (title.length < 2) return { error: c.kind === "fun" ? "Give the category a name." : "Give the course a name." };
+  const patch: Record<string, unknown> = { title, visibility: input.visibility === "private" ? "private" : "public" };
+  if (c.kind !== "fun") {
+    const code = (input.code ?? "").trim().toUpperCase().replace(/\s+/g, " ").slice(0, 20);
+    if (code.length < 2) return { error: "Add the course code, like MATH 1." };
+    patch.code = code;
+    patch.professor = (input.professor ?? "").trim().slice(0, 60) || null;
+  }
+  const { error } = await db.from("courses").update(patch).eq("id", courseId);
+  if (error) return { error: error.message };
+  revalidatePath(`/courses/${c.slug}`); revalidatePath("/library"); revalidatePath("/");
+  return { ok: true };
+}
+
+/** The owner renames or renumbers one of their chapters (or games). */
+export async function updateMyChapter(chapterId: string, input: { title: string; number: number }) {
+  const user = await currentUser();
+  if (!user) return { error: "Sign in first." };
+  if (!(await ownsChapter(user.id, chapterId))) return { error: "That chapter wasn't found." };
+  const title = input.title.trim().replace(/\s+/g, " ").slice(0, 120);
+  const number = Math.floor(Number(input.number));
+  if (title.length < 1) return { error: "Give it a name." };
+  if (!(number >= 1 && number < 1000)) return { error: "Use a number from 1 to 999." };
+  const { error } = await admin().from("chapters").update({ title, number }).eq("id", chapterId);
+  if (error) return { error: error.message.includes("chapters_course_prof_number") ? `Chapter ${number} already exists in this course.` : error.message };
+  revalidatePath("/", "layout");
+  return { ok: true };
+}

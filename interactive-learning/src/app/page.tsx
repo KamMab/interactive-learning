@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { listCourseCards, listMyCourses, listStudentSets, trendingSets } from "@/lib/db";
+import { listCourseCards, listMyCourses, trendingSets } from "@/lib/db";
 import CourseShelf from "@/components/CourseShelf";
 import { currentUser } from "@/lib/auth-server";
 import { hasSupabase } from "@/lib/config";
@@ -13,7 +13,7 @@ export default async function Home() {
   const user = await currentUser();
   const [trending, fun, courses, mine] = await Promise.all([
     hasSupabase() ? trendingSets(8) : Promise.resolve(demoCards()),
-    listStudentSets("fun", 8),
+    listCourseCards(8, "fun"),
     listCourseCards(6),
     user ? listMyCourses(user.id) : Promise.resolve([]),
   ]);
@@ -36,9 +36,9 @@ export default async function Home() {
       <section className="flex flex-col gap-4">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div><h2 className="text-[24px] font-bold">For fun</h2><p className="text-sm text-muted">Games other students made: capitals, trivia, anything.</p></div>
-          <Link href="/upload" className="btn-ghost">Make a game</Link>
+          <Link href="/upload?fun=1" className="btn-ghost">Make a game</Link>
         </div>
-        <SetShelf cards={fun} empty={<div className="card p-5"><p className="text-muted">No games yet. Be the first: upload an idea like &ldquo;US state capitals&rdquo; and choose <b>For fun</b>.</p></div>} />
+        <CourseShelf fun courses={fun} empty={<div className="card p-5"><p className="text-muted">No games yet. Be the first: upload an idea like &ldquo;US state capitals&rdquo; and choose <b>For fun</b>.</p></div>} />
       </section>
 
       <section className="flex flex-col gap-4">

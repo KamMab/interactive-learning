@@ -182,8 +182,8 @@ async function cardsFor(courses: Course[], plays?: Map<string, number>, onlyChap
       return {
         chapterId: ch.id,
         href: `/courses/${c.slug}/${ch.professor_id ? profSlug.get(ch.professor_id) ?? ALL_PROFS : ALL_PROFS}/${ch.number}`,
-        title: c.kind === "fun" ? c.title : ch.title,
-        course: c.kind === "fun" ? "For fun" : `${c.code} · Ch. ${ch.number}`,
+        title: ch.title || c.title,
+        course: c.kind === "fun" ? c.title : `${c.code} · Ch. ${ch.number}`,
         kind: c.owner_id ? (c.kind ?? "class") : "official",
         terms: content.terms.length, questions: content.questions.length,
         author: c.owner_id ? author.get(c.owner_id) ?? null : null,
@@ -260,10 +260,13 @@ export async function listSharedForCode(code: string): Promise<SetCard[]> {
  * Courses for Home/Library: library courses plus every student's shared class course ("MGMT 120B by kammab"),
  * only those with at least one published chapter. Library courses first, then by most chapters.
  */
-export async function listCourseCards(limit = 60): Promise<CourseCard[]> {
+export async function listCourseCards(limit = 60, kind: "class" | "fun" = "class"): Promise<CourseCard[]> {
+  if (!hasSupabase() && kind === "fun") return [{ id: SEED_FUN_COURSE.id, slug: SEED_FUN_COURSE.slug, code: SEED_FUN_COURSE.code, title: SEED_FUN_COURSE.title, chapters: SEED_CHAPTERS.filter((ch) => ch.course_id === SEED_FUN_COURSE.id).length, author: SEED_AUTHOR, official: false }];
   if (!hasSupabase()) return SEED_COURSES.map((c) => ({ id: c.id, slug: c.slug, code: c.code, title: c.title, chapters: SEED_CHAPTERS.filter((ch) => ch.course_id === c.id).length, author: null, official: true }));
   const db = admin();
-  const { data } = await db.from("courses").select("*").eq("published", true).neq("kind", "fun")
+  let q = db.from("courses").select("*").eq("published", true);
+  q = kind === "fun" ? q.eq("kind", "fun") : q.neq("kind", "fun");
+  const { data } = await q
     .or("owner_id.is.null,visibility.eq.public").order("created_at", { ascending: false }).limit(300);
   const courses = (data ?? []) as Course[];
   if (!courses.length) return [];

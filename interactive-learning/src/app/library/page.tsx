@@ -1,13 +1,12 @@
 import Link from "next/link";
-import { listCourseCards, listStudentSets } from "@/lib/db";
-import SetShelf from "@/components/SetShelf";
+import { listCourseCards } from "@/lib/db";
 import CourseShelf from "@/components/CourseShelf";
 import { AUTH_ENABLED, hasSupabase } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
 export default async function Library() {
-  const [courses, fun] = await Promise.all([listCourseCards(), listStudentSets("fun", 30)]);
+  const [courses, fun] = await Promise.all([listCourseCards(), listCourseCards(60, "fun")]);
   const canUpload = AUTH_ENABLED && hasSupabase();
   return (
     <div className="flex flex-col gap-10">
@@ -27,8 +26,11 @@ export default async function Library() {
         <CourseShelf courses={courses} empty={<p className="text-muted">No courses yet. <Link href="/upload" className="underline">Upload your class notes</Link> to start one.</p>} />
       </section>
       <section className="flex flex-col gap-4">
-        <h2 className="text-[24px] font-bold">For fun</h2>
-        <SetShelf cards={fun} empty={<p className="text-muted">No games yet. <Link href="/upload" className="underline">Make one</Link>.</p>} />
+        <div>
+          <h2 className="text-[24px] font-bold">For fun</h2>
+          <p className="text-sm text-muted">Categories of games, like US States with capitals, flags and locations inside.</p>
+        </div>
+        <CourseShelf fun courses={fun} empty={<p className="text-muted">No games yet. <Link href="/upload?fun=1" className="underline">Make one</Link>.</p>} />
       </section>
     </div>
   );

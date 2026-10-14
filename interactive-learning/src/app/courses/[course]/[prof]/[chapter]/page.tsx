@@ -26,16 +26,19 @@ export default async function ChapterPage({
   const matches = chapters.filter((c) => c.number === Number(num) && (prof === "all" || c.professor_id === prof.id || c.professor_id === null));
   const chapter = (prof === "all" ? matches.find((c) => c.professor_id === null) : matches.find((c) => c.professor_id === prof.id)) ?? matches[0];
   if (!chapter) notFound();
-  const who = prof === "all" ? "" : ` · ${prof.name}`;
+  // Which professor's notes this is built from: the chapter's own professor, or the course's.
+  const teacher = prof !== "all" ? prof.name : course.professor ?? "";
+  const who = teacher ? ` · ${teacher}` : "";
   const author = course.owner_id ? await getProfile(course.owner_id) : null;
   const fun = course.kind === "fun";
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        {!fun && <Link href={`/courses/${course.slug}`} className="link">{course.code}{author ? ` by ${author.display_name}` : ""}</Link>}
-        <span className="eyebrow mt-4 block">{fun ? "For fun" : `${course.code}${who} · Chapter ${chapter.number}`}</span>
+        <Link href={`/courses/${course.slug}`} className="link">{fun ? course.title : course.code}{author ? ` by ${author.display_name}` : ""}</Link>
+        <span className="eyebrow mt-4 block">{fun ? `For fun · ${course.title}` : `${course.code} · Chapter ${chapter.number}`}</span>
         <h1 className="big mt-2">{chapter.title}</h1>
+        {!fun && teacher && <p className="mt-2 text-[18px] font-bold">{teacher}&apos;s notes</p>}
         <p className="mt-2 text-sm text-muted">
           {course.owner_id
             ? author && course.visibility === "public"
