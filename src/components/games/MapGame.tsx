@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { recordResult } from "@/lib/progress";
 import { shuffle } from "@/lib/id";
 import type { MapItem } from "@/lib/types";
@@ -35,6 +35,47 @@ export default function MapGame({ chapter, opts, onBack, mapBase }: GP & { mapBa
 
   useEffect(() => { loadMap(set.region, mapBase).then(setData).catch(() => setData(null)); }, [set.region, mapBase]);
   const cur: MapItem | undefined = items[i];
+
+  // Zoom to the places in play (e.g. one continent or region picked in Topics) and fade everything else.
+  const inPlay = useMemo(() => new Set(set.items.map((it) => norm(it.place))), [set.items]);
+  const svg = useRef<SVGSVGElement>(null);
+  const [view, setView] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    if (!data || !svg.current) return;
+    const [fx, fy, fw, fh] = data.viewBox.split(/[\s,]+/).map(Number);
+    // Each place's main landmass only, so overseas bits (French Guiana for France) don't drag the view away.
+    const probe = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    probe.setAttribute("visibility", "hidden");
+    svg.current.appendChild(probe);
+    const boxes: DOMRect[] = [];
+    svg.current.querySelectorAll<SVGPathElement>("path[data-name]").forEach((el) => {
+      if (!inPlay.has(norm(el.dataset.name ?? ""))) return;
+      let best: DOMRect | null = null;
+      for (const part of (el.getAttribute("d") ?? "").split(/(?=M)/)) {
+        probe.setAttribute("d", part);
+        const bb = probe.getBBox();
+        if (!best || bb.width * bb.height > best.width * best.height) best = bb;
+      }
+      if (best) boxes.push(best);
+    });
+    probe.remove();
+    // Shapes that wrap across the map (Russia, Fiji, Alaska's islands) would stretch the box, so leave them out.
+    const use = boxes.filter((b) => b.width < fw * 0.3);
+    const list = use.length ? use : boxes;
+    if (!list.length) { setView(null); return; }
+    let x0 = Math.min(...list.map((b) => b.x)), y0 = Math.min(...list.map((b) => b.y));
+    let x1 = Math.max(...list.map((b) => b.x + b.width)), y1 = Math.max(...list.map((b) => b.y + b.height));
+    if ((x1 - x0) * (y1 - y0) > fw * fh * 0.6) { setView(null); return; } // nearly everything: keep the full map
+    const pad = Math.max(x1 - x0, y1 - y0) * 0.08;
+    x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
+    // Keep a sensible shape (not a sliver) and stay inside the map.
+    const aspect = fw / fh;
+    let w = x1 - x0, h = y1 - y0;
+    if (w / h < aspect * 0.75) { const nw = h * aspect * 0.75; x0 -= (nw - w) / 2; w = nw; }
+    if (w / h > aspect * 1.6) { const nh = w / (aspect * 1.6); y0 -= (nh - h) / 2; h = nh; }
+    x0 = Math.max(fx, Math.min(x0, fx + fw - w)); y0 = Math.max(fy, Math.min(y0, fy + fh - h));
+    setView(`${x0} ${y0} ${Math.min(w, fw)} ${Math.min(h, fh)}`);
+  }, [data, inPlay]);
 
   function advance(gotIt: boolean) {
     const s = score + (gotIt ? 1 : 0);
@@ -73,10 +114,10 @@ export default function MapGame({ chapter, opts, onBack, mapBase }: GP & { mapBa
       </div>
       <div className="mapbox">
         {!data ? <div className="h-72 animate-pulse" /> : (
-          <svg viewBox={data.viewBox} role="img" aria-label="Map">
+          <svg ref={svg} viewBox={view ?? data.viewBox} role="img" aria-label="Map" className={view ? "zoomed" : ""}>
             {data.shapes.map((s) => {
               const n = norm(s.name), isCur = cur && n === norm(cur.place);
-              const cls = flash === n ? "ok" : wrong && norm(wrong) === n ? "bad" : wrong && isCur ? "show" : solved.has(n) ? "done" : "";
+              const cls = flash === n ? "ok" : wrong && norm(wrong) === n ? "bad" : wrong && isCur ? "show" : solved.has(n) ? "done" : view && !inPlay.has(n) ? "dim" : "";
               return <path key={s.name} d={s.d} data-name={s.name} className={`mp ${cls}`} onClick={() => click(s.name)}><title>{solved.has(n) || (wrong && isCur) ? s.name : ""}</title></path>;
             })}
             <path d={data.borders} className="mp-borders" />

@@ -4,7 +4,7 @@ export default function Results({ title, score, total, extra, onReplay, onBack }
   const pct = total ? Math.round((score / total) * 100) : 0;
   const verdict = pct >= 90 ? "Excellent work" : pct >= 70 ? "Nice work" : pct >= 50 ? "Getting there" : "Keep practicing";
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-5 enter">
+    <div className="mx-auto flex game-col flex-col gap-5 enter">
       <section className="card p-6">
         <span className="eyebrow">{title}</span>
         <p className="verdict">{verdict}</p>

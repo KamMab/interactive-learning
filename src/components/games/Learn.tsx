@@ -140,7 +140,7 @@ export default function Learn({ chapter, opts, onBack }: GP) {
 
   if (phase === "done")
     return (
-      <div className="mx-auto flex max-w-2xl flex-col gap-5 enter">
+      <div className="mx-auto flex game-col flex-col gap-5 enter">
         <section className="card p-6">
           <span className="eyebrow">Learn</span>
           <p className="verdict">You mastered all {all.length}</p>
@@ -156,7 +156,7 @@ export default function Learn({ chapter, opts, onBack }: GP) {
 
   if (phase === "summary")
     return (
-      <div className="mx-auto flex max-w-2xl flex-col gap-4 enter">
+      <div className="mx-auto flex game-col flex-col gap-4 enter">
         <section className="card p-6">
           <span className="eyebrow">Round {round} complete</span>
           <p className="verdict">{results.filter((r) => r.ok).length} of {results.length} right</p>
@@ -179,7 +179,7 @@ export default function Learn({ chapter, opts, onBack }: GP) {
   const right = picked === cur.answer;
   const isTermBack = cur.kind === "definition";
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-3">
+    <div className="mx-auto flex game-col flex-col gap-3">
       {bar}
       <div className="sheet enter" key={cur.id + queue.length}>
         <div className="flex flex-wrap items-center justify-between gap-2">

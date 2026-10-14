@@ -34,7 +34,7 @@ export default function Rush({ chapter, opts, onBack }: GP) {
   if (phase === "done") return <Results title={modeName("rush", chapter.content)} score={score} total={answered} extra={{ value: limit + "s", label: "Round" }} onBack={onBack} onReplay={begin} />;
   const q = queue[0];
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-3">
+    <div className="mx-auto flex game-col flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="pill mr-auto"><b>{score}</b> correct</span>
         {streak >= 3 && <span className="pill streak"><b>{streak}</b> in a row</span>}

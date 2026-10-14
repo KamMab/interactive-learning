@@ -31,7 +31,7 @@ export default function Quiz({ chapter, opts, onBack }: GP) {
     onReplay={() => { setRound(r => r + 1); setI(0); setScore(0); setPts(0); setStreak(0); setBest(0); setPicked(null); setDone(false); }} />;
   const right = picked === q.answer;
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-3">
+    <div className="mx-auto flex game-col flex-col gap-3">
       <div className="track"><i style={{ width: `${(i + (picked !== null ? 1 : 0)) / questions.length * 100}%` }} /></div>
       <div className="flex flex-wrap items-center gap-2">
         <span className="mono mr-auto text-[13px] text-muted">Question {i + 1} of {questions.length}</span>
@@ -44,7 +44,7 @@ export default function Quiz({ chapter, opts, onBack }: GP) {
         <span className="tag">{chapter.title}</span>
         {q.image && <Pic src={q.image} alt="Picture for this question" className="q-pic mt-3" />}
         <p className="mb-4 mt-3 text-[clamp(19px,3.4vw,23px)] font-bold leading-snug">{q.prompt}</p>
-        <div className="grid gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           {q.choices.map((c, idx) => {
             const st = picked === null ? "" : idx === q.answer ? "ok" : idx === picked ? "bad" : "dim";
             return <button key={idx} disabled={picked !== null} onClick={() => pick(idx)} className={`opt ${st}`}><span className="ob">{String.fromCharCode(65 + idx)}</span><span className="min-w-0 flex-1">{c}</span></button>;

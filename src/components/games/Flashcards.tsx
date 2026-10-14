@@ -24,7 +24,7 @@ export default function Flashcards({ chapter, opts, onBack }: GP) {
     addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [done]);
   if (done) return <Results title="Flashcards" score={known} total={deck.length} extra={{ value: deck.length - known, label: "Still learning" }} onBack={onBack} onReplay={() => { setRound(r => r + 1); setI(0); setKnown(0); setLearning(0); setDone(false); }} />;
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+    <div className="mx-auto flex game-col flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="pill" style={{ color: "#C2571A" }}>Still learning <b>{learning}</b></span>
         <span className="mono text-sm text-muted">{i + 1} / {deck.length}</span>
@@ -46,7 +46,7 @@ export default function Flashcards({ chapter, opts, onBack }: GP) {
         </span>
       </button>
       <p className="fc-hint"><kbd>Space</kbd> or click the card to flip</p>
-      <div className="mx-auto grid w-full max-w-xl grid-cols-2 gap-3">
+      <div className="grid w-full grid-cols-2 gap-3">
         <button className="btn-ghost fc-learn" disabled={!flipped} onClick={() => answer(false)}>Still learning</button>
         <button className="btn-ghost fc-know" disabled={!flipped} onClick={() => answer(true)}>Know it</button>
       </div>

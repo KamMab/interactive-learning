@@ -30,7 +30,7 @@ export default function Entries({ chapter, opts, onBack }: GP) {
   const dr = rows.reduce((s, r) => s + Number(r.debit || 0), 0), cr = rows.reduce((s, r) => s + Number(r.credit || 0), 0);
   if (done) return <Results title="Journal Entries" score={score} total={entries.length} onBack={onBack} onReplay={() => { setRound(r => r + 1); setI(0); setScore(0); setRows([blank(), blank()]); setChecked(null); setDone(false); }} />;
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-3">
+    <div className="mx-auto flex game-col flex-col gap-3">
       <div className="track"><i style={{ width: `${(i + (checked !== null ? 1 : 0)) / entries.length * 100}%` }} /></div>
       <span className="mono text-[13px] text-muted">Entry {i + 1} of {entries.length}</span>
       <div className="sheet enter" key={entry.id}>
