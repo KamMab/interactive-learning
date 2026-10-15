@@ -41,6 +41,15 @@ export type ChapterContent = {
   questions: Question[];
   entries: JournalEntry[];
   map?: MapSet | null;
+  /** Reference material students can open while studying, e.g. "interest-tables" (PV/FV factor tables). */
+  tools?: Tool[];
+};
+
+export const TOOLS = ["interest-tables"] as const;
+export type Tool = (typeof TOOLS)[number];
+export const cleanTools = (x: unknown): Tool[] | undefined => {
+  const t = (Array.isArray(x) ? x : []).filter((v): v is Tool => (TOOLS as readonly string[]).includes(v as string));
+  return t.length ? [...new Set(t)] : undefined;
 };
 
 export const MODES = ["learn", "flashcards", "quiz", "map", "entries", "match", "rush"] as const;
@@ -192,6 +201,7 @@ export function normalizeContent(c: Partial<ChapterContent> | null | undefined):
     entries: c?.entries ?? [],
     labels: c?.labels?.front && c?.labels?.back ? c.labels : undefined,
     map: c?.map?.items?.length ? c.map : null,
+    tools: cleanTools(c?.tools),
   };
 }
 

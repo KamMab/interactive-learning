@@ -7,6 +7,8 @@ import { MAP_NAMES } from "./map-names";
 import { sectionMapper } from "./import-format";
 import {
   MODES,
+  TOOLS,
+  cleanTools,
   normalizeSettings,
   type Chapter,
   type ChapterContent,
@@ -165,6 +167,11 @@ const studySetTool: Anthropic.Messages.Tool = {
         description: "Which study modes fit this material best, best first (the first one opens when a student picks the set). Only list modes the set has content for.",
         items: { type: "string", enum: [...MODES] },
       },
+      tools: {
+        type: "array",
+        description: "Reference material students can open while studying. Use [\"interest-tables\"] when answering needs present/future value factor tables (time value of money, bond pricing, notes, leases, annuities); otherwise [].",
+        items: { type: "string", enum: [...TOOLS] },
+      },
       chapter_title: { type: "string", description: "The chapter's full title as written in the notes (e.g. 'Linear Algebra' from 'Chapter 3: Linear Algebra'), without the chapter number. Empty if the notes don't name it." },
       chapter_number: { type: "integer", description: "The chapter number printed in the notes, if any." },
       change_note: { type: "string", description: "One or two sentences telling the admin what you produced or changed." },
@@ -271,6 +278,7 @@ export async function generateStudySet(input: GenerateInput): Promise<GenerateRe
     entries: (out.entries ?? []).map((e: any) => ({ id: uid(), scenario: e.scenario, lines: e.lines ?? [], explanation: e.explanation ?? "", section: sec.of(e) })),
     labels: out.labels?.front && out.labels?.back ? { front: String(out.labels.front), back: String(out.labels.back) } : undefined,
     map: cleanMap(out.map, sec.of),
+    tools: cleanTools(out.tools),
   };
 
   const merged: ChapterContent =
@@ -282,6 +290,7 @@ export async function generateStudySet(input: GenerateInput): Promise<GenerateRe
           questions: [...chapter.content.questions, ...fresh.questions],
           entries: [...chapter.content.entries, ...fresh.entries],
           labels: chapter.content.labels ?? fresh.labels,
+          tools: cleanTools([...(chapter.content.tools ?? []), ...(fresh.tools ?? [])]),
           map: chapter.content.map && fresh.map && chapter.content.map.region === fresh.map.region
             ? { ...chapter.content.map, items: [...chapter.content.map.items, ...fresh.map.items] }
             : chapter.content.map ?? fresh.map,

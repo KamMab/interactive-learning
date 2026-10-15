@@ -2,7 +2,7 @@
 // The same rules guide Claude when the site builds a set itself.
 import { uid } from "./id";
 import { MAP_NAMES } from "./map-names";
-import { DEFAULT_SETTINGS, MODES, modeCount, type ChapterContent, type ChapterSettings, type Mode } from "./types";
+import { DEFAULT_SETTINGS, MODES, cleanTools, modeCount, type ChapterContent, type ChapterSettings, type Mode } from "./types";
 
 export const FORMAT_RULES = `Shape the set to the subject instead of forcing one format:
 - terms: front/back pairs (term → definition, state → capital, Spanish → English). Set "labels" when Term/Definition is the wrong wording, e.g. {"front":"State","back":"Capital"}.
@@ -10,10 +10,11 @@ export const FORMAT_RULES = `Shape the set to the subject instead of forcing one
 - entries: accounting journal entries only (debits equal credits, 0 in the unused column). Use [] for every other subject.
 - map: geography only, when the places are US states or world countries, using the exact names below. Otherwise null.
 - modes: the study modes that suit this material, best first: learn (adaptive rounds, a good first choice), flashcards, quiz (timed multiple choice), map, entries, match (pair both sides of terms), rush (rapid-fire questions).
+- tools: ["interest-tables"] when students need present/future value factor tables to answer (time value of money, bonds, notes, leases). Otherwise leave it out.
 - sections: when the material is long (several distinct topics, or more than about 30 terms and questions), split it into 2-8 sections in the order it's taught, list them in "sections" (a short title plus a few words on what each covers), and give every term, question, entry and map item a "section" number (1 = the first section). Leave "sections" empty for short sets.
 Make 10-25 terms and 6-15 questions unless the topic is smaller. For a long chapter with sections, cover every section: about 8-15 terms and 5-10 questions each.`;
 
-export const FORMAT_SHAPE = `{"title": string, "summary": string, "sections": [{"title": string, "blurb": string}], "labels": {"front": string, "back": string} | null, "terms": [{"term": string, "definition": string, "section": number}], "questions": [{"prompt": string, "choices": [string, string, string, string], "answer": number, "explanation": string, "section": number}], "entries": [{"scenario": string, "lines": [{"account": string, "debit": number, "credit": number}], "explanation": string, "section": number}], "map": {"region": "us-states" | "world", "ask": string, "items": [{"place": string, "prompt": string, "section": number}]} | null, "modes": [string]}`;
+export const FORMAT_SHAPE = `{"title": string, "summary": string, "sections": [{"title": string, "blurb": string}], "labels": {"front": string, "back": string} | null, "terms": [{"term": string, "definition": string, "section": number}], "questions": [{"prompt": string, "choices": [string, string, string, string], "answer": number, "explanation": string, "difficulty": "easy" | "medium" | "hard", "section": number}], "entries": [{"scenario": string, "lines": [{"account": string, "debit": number, "credit": number}], "explanation": string, "section": number}], "map": {"region": "us-states" | "world", "ask": string, "items": [{"place": string, "prompt": string, "section": number}]} | null, "modes": [string], "tools": ["interest-tables"] | []}`;
 
 export const MAP_NAME_LIST = `Map place names. us-states: ${MAP_NAMES["us-states"].join(", ")}. world: ${MAP_NAMES.world.join(", ")}.`;
 
@@ -69,11 +70,13 @@ export function cleanSet(out: any): { content: ChapterContent; settings: Chapter
     questions: arr(out?.questions)
       .filter((q: any) => Array.isArray(q?.choices) && q.choices.length >= 2 && Number(q.answer) >= 0 && Number(q.answer) < q.choices.length).slice(0, 300)
       .map((q: any) => ({ id: uid(), prompt: String(q.prompt).slice(0, 1000), choices: q.choices.slice(0, 6).map((c: unknown) => String(c).slice(0, 300)),
-        answer: Number(q.answer), explanation: String(q.explanation ?? "").slice(0, 1000), section: sec.of(q), image: imageOf(q) })),
+        answer: Number(q.answer), explanation: String(q.explanation ?? "").slice(0, 1000), section: sec.of(q), image: imageOf(q),
+        ...(["easy", "medium", "hard"].includes(q.difficulty) ? { difficulty: q.difficulty } : {}) })),
     entries: arr(out?.entries).filter((e: any) => Array.isArray(e?.lines)).slice(0, 100)
       .map((e: any) => ({ id: uid(), scenario: String(e.scenario ?? "").slice(0, 1000), explanation: String(e.explanation ?? "").slice(0, 1000),
         lines: e.lines.slice(0, 12).map((l: any) => ({ account: String(l.account ?? ""), debit: Number(l.debit) || 0, credit: Number(l.credit) || 0 })), section: sec.of(e) })),
     map: null,
+    tools: cleanTools(out?.tools),
   };
   const m = out?.map;
   if (m && (m.region === "us-states" || m.region === "world") && Array.isArray(m.items)) {

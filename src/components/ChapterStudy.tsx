@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { MODE_ICON } from "./icons";
 import { openSettings } from "./SiteHeader";
 import { GAMES } from "./games/GameHost";
+import InterestTables from "./InterestTables";
 import { PLAYING, chapterProgress, noteVisit, save, store, subscribe } from "@/lib/store";
 import { CORE_MODES, EXTRA_MODES, MODE_INFO, contentFor, modeCount, modeName, usableSections, type Chapter, type ChapterContent, type Mode } from "@/lib/types";
 
@@ -123,6 +124,7 @@ export default function ChapterStudy({ chapter, label, initialMode, initialSecti
 
   return (
     <div className="flex flex-col gap-10">
+      {chapter.content.tools?.includes("interest-tables") && <InterestTables />}
       {sections.length > 1 && (
         <Topics sections={sections} chapter={chapter} picked={picked} levels={ready ? progress?.learn : undefined} onChange={choose} />
       )}

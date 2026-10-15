@@ -11,12 +11,14 @@ const take = <T,>(arr: T[], n?: number) => (n && n > 0 ? arr.slice(0, n) : arr);
 
 export default function Quiz({ chapter, opts, onBack }: GP) {
   const { content, settings } = chapter;
-  const limit = store().settings.timer;
+  const base = store().settings.timer;
   const [round, setRound] = useState(0);
   const questions = useMemo(() => take(settings.shuffle ? shuffle(content.questions) : content.questions, opts.count), [round]);
-  const [i, setI] = useState(0), [picked, setPicked] = useState<number | null>(null), [score, setScore] = useState(0), [pts, setPts] = useState(0), [streak, setStreak] = useState(0), [best, setBest] = useState(0), [left, setLeft] = useState(limit), [done, setDone] = useState(false), [gain, setGain] = useState(0);
+  const [i, setI] = useState(0), [picked, setPicked] = useState<number | null>(null), [score, setScore] = useState(0), [pts, setPts] = useState(0), [streak, setStreak] = useState(0), [best, setBest] = useState(0), [left, setLeft] = useState(base), [done, setDone] = useState(false), [gain, setGain] = useState(0);
   const t0 = useRef(performance.now());
   const q = questions[i];
+  // Worked problems (marked medium or hard) get more time for the speed bonus.
+  const limit = base ? base * (q?.difficulty === "hard" ? 4 : q?.difficulty === "medium" ? 2 : 1) : 0;
   useEffect(() => { t0.current = performance.now(); setLeft(limit); if (!limit) return;
     const t = setInterval(() => { const l = Math.max(0, limit - (performance.now() - t0.current) / 1000); setLeft(l); }, 100); return () => clearInterval(t); }, [i, round]);
   function pick(idx: number) {

@@ -194,13 +194,20 @@ export default function UploadForm({ myCourses, knownCodes, authorName, preset }
           <div className="flex flex-col gap-3">
             <ol className="flex list-none flex-col gap-2 p-0 text-sm">
               <li><b>1.</b> Copy the format and paste it into Claude (claude.ai). Say what the quiz should be about if you haven&apos;t named it above.</li>
-              <li><b>2.</b> Paste Claude&apos;s whole answer below.</li>
+              <li><b>2.</b> Paste Claude&apos;s whole answer below, or choose the file if Claude gave you one.</li>
             </ol>
-            <div><button type="button" className="btn-ghost" onClick={copy}>{copied ? "Copied" : "Copy the format for Claude"}</button></div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="btn-ghost" onClick={copy}>{copied ? "Copied" : "Copy the format for Claude"}</button>
+              <label className="btn-ghost cursor-pointer">
+                Choose a quiz file
+                <input type="file" accept=".json,.txt,application/json,text/plain" className="sr-only"
+                  onChange={async (e) => { const f = e.target.files?.[0]; if (f) setPasted(await f.text()); e.target.value = ""; }} />
+              </label>
+            </div>
             <textarea id="u-paste" className="input mono text-[13px]" rows={7} value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder='{"summary": "…", "terms": [ … ], "questions": [ … ] }' />
             {check && ("error" in check
               ? <p className="text-sm text-bad">{check.error}</p>
-              : <p className="tag ok self-start">Looks good: {check.content.terms.length} cards · {check.content.questions.length} questions{check.content.sections?.length ? ` · ${check.content.sections.length} sections` : ""}{check.content.map ? ` · ${check.content.map.items.length} map places` : ""}</p>)}
+              : <p className="tag ok self-start">Looks good: {check.content.terms.length} cards · {check.content.questions.length} questions{check.content.sections?.length ? ` · ${check.content.sections.length} sections` : ""}{check.content.entries.length ? ` · ${check.content.entries.length} journal entries` : ""}{check.content.map ? ` · ${check.content.map.items.length} map places` : ""}{check.content.tools?.includes("interest-tables") ? " · interest tables" : ""}</p>)}
           </div>
         )}
       </fieldset>
