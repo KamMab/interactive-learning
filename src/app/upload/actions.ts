@@ -28,7 +28,8 @@ export type UploadMeta = {
 /** Learn, Flashcards and Quick-fire first, then the extras that fit: the student's picks, or Claude's if they picked none. */
 function finalModes(content: ChapterContent, picked: Mode[] | undefined, suggested: Mode[] | undefined): Mode[] {
   const fits = (m: Mode) => modeCount(m, content) > 0;
-  const want = (picked?.length ? picked : suggested ?? []).filter((m) => EXTRA_MODES.includes(m));
+  // Ways the student ticked plus the ones the set was made for (e.g. a quiz file's Journal Entries), so ticking one never drops the others.
+  const want = [...(picked ?? []), ...(suggested ?? [])].filter((m) => EXTRA_MODES.includes(m));
   const extras = [...new Set(want)].filter(fits);
   return [...CORE_MODES.filter(fits), ...extras];
 }
