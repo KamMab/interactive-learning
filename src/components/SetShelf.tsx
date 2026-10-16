@@ -16,7 +16,7 @@ export default function SetShelf({ cards, empty, showVisibility = false }: { car
             </div>
           </Link>
           <div className="book-body flex flex-col gap-1">
-            <span>{c.party ? <>Party game · <b>{c.party}</b> questions · solo, live or challenge</> : <><b>{c.terms}</b> terms · <b>{c.questions}</b> questions</>}{c.plays ? <> · <b>{c.plays}</b> plays this week</> : null}</span>
+            <span>{c.mathGame ? <>Math game · endless problems · solo, live or challenge</> : c.party ? <>Party game · <b>{c.party}</b> questions · solo, live or challenge</> : <><b>{c.terms}</b> terms · <b>{c.questions}</b> questions</>}{c.plays ? <> · <b>{c.plays}</b> plays this week</> : null}</span>
             <span>
               {c.author ? <>By <Link href={`/u/${c.author.handle}`} className="underline">{c.author.display_name}</Link></> : c.kind === "official" ? "By Interactive Learning" : "By you"}
               {showVisibility && c.visibility && <> · <span className={c.visibility === "public" ? "tag ok" : "tag"}>{c.visibility === "public" ? "Shared" : "Only you"}</span></>}

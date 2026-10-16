@@ -1,8 +1,9 @@
 import "server-only";
 import { admin } from "./db";
+import { cleanMath, mathProblem, readNumber, type MathSpec } from "./math";
 import { addSaid, choosePrompt, cleanSame, judgeRound, makeCode, makeResolver, rng, seedFor, sitePick, usedIn, type SaidLog, type SameSet, type Verdict } from "./same";
 
-// Game rooms for "Don't Say the Same Thing as Me". A host gets a code like "ioq-13b".
+// Game rooms for the party games ("Don't Say the Same Thing as Me" and "Math Blitz"). A host gets a code like "ioq-13b".
 // live: everyone answers the same prompt at the same time (Kahoot-style); the server keeps the secret answer.
 // async: a challenge. Everyone plays the same seeded game against the site on their own time; best streaks are listed.
 // Rooms advance lazily: every poll checks the clock and moves the game along, so no background job is needed.
@@ -10,14 +11,14 @@ import { addSaid, choosePrompt, cleanSame, judgeRound, makeCode, makeResolver, r
 export type Player = { id: string; name: string; alive: boolean; streak: number; outRound?: number };
 export type RevealRow = { id: string; name: string; typed: string; answer: string | null; verdict: Verdict };
 export type LiveState = {
-  kind: "live"; chapterId: string; title: string; seed: number; seconds: number; host: string; hostName: string;
+  kind: "live"; game?: "same" | "math"; chapterId: string; title: string; seed: number; seconds: number; host: string; hostName: string;
   status: "lobby" | "answering" | "reveal" | "over";
   players: Player[]; round: number; prompt: number; promptText: string; level: number; site: string; deadline: number;
   answers: Record<string, { typed: string; answer: string | null }>; used: SaidLog; asked: number[]; // used: what was said, per question
   last?: { round: number; prompt: string; site: string; rows: RevealRow[] }; revealUntil?: number; ending?: boolean; winners?: string[];
 };
 export type AsyncState = {
-  kind: "async"; chapterId: string; title: string; seed: number; host: string; hostName: string;
+  kind: "async"; game?: "same" | "math"; chapterId: string; title: string; seed: number; host: string; hostName: string;
   results: { id: string; name: string; streak: number; at: number }[];
 };
 type State = LiveState | AsyncState;
@@ -26,15 +27,17 @@ type State = LiveState | AsyncState;
 const db = () => ((globalThis as { __roomsDb?: ReturnType<typeof admin> }).__roomsDb ?? admin());
 const MAX_PLAYERS = 100;
 const REVEAL_MS = 7000;
-const sets = new Map<string, { at: number; set: SameSet; title: string }>();
+type Game = { set?: SameSet; math?: MathSpec };
+const sets = new Map<string, { at: number; title: string } & Game>();
 
 async function loadSet(chapterId: string) {
   const hit = sets.get(chapterId);
   if (hit && Date.now() - hit.at < 300000) return hit;
   const { data } = await db().from("chapters").select("title,content,published").eq("id", chapterId).maybeSingle();
   const set = data?.published ? cleanSame((data.content as any)?.same) : undefined;
-  if (!set) throw new Error("This game isn't available.");
-  const v = { at: Date.now(), set, title: data!.title as string };
+  const math = data?.published && !set ? cleanMath((data.content as any)?.math) : undefined;
+  if (!set && !math) throw new Error("This game isn't available.");
+  const v = { at: Date.now(), set, math, title: data!.title as string };
   sets.set(chapterId, v);
   return v;
 }
@@ -54,27 +57,28 @@ async function write(code: string, version: number, state: State) {
 }
 
 /** Load → change → save, retrying when two people act at the same moment. */
-async function mutate(code: string, fn: (s: State, set: SameSet) => string | void) {
+async function mutate(code: string, fn: (s: State, g: Game) => string | void) {
   for (let i = 0; i < 6; i++) {
     const cur = await read(code);
     if (!cur) return { error: "No game with that code. Check it and try again." };
-    const { set } = await loadSet(cur.state.chapterId);
+    const g = await loadSet(cur.state.chapterId);
     const s = structuredClone(cur.state);
-    const err = fn(s, set);
+    const err = fn(s, g);
     if (err) return { error: err };
-    if (await write(code, cur.version, s)) return { state: s, set };
+    if (await write(code, cur.version, s)) return { state: s };
     await new Promise((r) => setTimeout(r, 40 + Math.random() * 120));
   }
   return { error: "The game is busy. Try again." };
 }
 
 export async function createRoom(input: { chapterId: string; kind: "live" | "async"; host: string; hostName: string; hostPlays: boolean; seconds: number }) {
-  const { title } = await loadSet(input.chapterId);
+  const { title, set } = await loadSet(input.chapterId);
+  const game = set ? "same" as const : "math" as const;
   const hostName = input.hostName.trim().slice(0, 24) || "Host";
   const seed = Math.floor(Math.random() * 2 ** 31);
   const state: State = input.kind === "async"
-    ? { kind: "async", chapterId: input.chapterId, title, seed, host: input.host, hostName, results: [] }
-    : { kind: "live", chapterId: input.chapterId, title, seed, seconds: [15, 20, 30, 45, 60].includes(input.seconds) ? input.seconds : 30,
+    ? { kind: "async", game, chapterId: input.chapterId, title, seed, host: input.host, hostName, results: [] }
+    : { kind: "live", game, chapterId: input.chapterId, title, seed, seconds: [15, 20, 30, 45, 60].includes(input.seconds) ? input.seconds : 30,
         host: input.host, hostName, status: "lobby", players: input.hostPlays ? [{ id: input.host, name: hostName, alive: true, streak: 0 }] : [],
         round: 0, prompt: -1, promptText: "", level: 1, site: "", deadline: 0, answers: {}, used: {}, asked: [] };
   for (let i = 0; i < 8; i++) {
@@ -86,9 +90,16 @@ export async function createRoom(input: { chapterId: string; kind: "live" | "asy
   return { error: "Couldn't make a code. Try again." };
 }
 
-function nextRound(s: LiveState, set: SameSet, now: number) {
+function nextRound(s: LiveState, g: Game, now: number) {
   const alive = s.players.filter((p) => p.alive);
   const round = s.round + 1;
+  if (s.game === "math") {
+    const m = mathProblem(s.seed, round);
+    Object.assign(s, { round, prompt: round, promptText: m.text, level: m.level, site: String(m.answer),
+      deadline: now + s.seconds * 1000, answers: {}, status: "answering", revealUntil: undefined });
+    return;
+  }
+  const set = g.set!;
   const log = s.used && !Array.isArray(s.used) ? s.used : {};
   const i = choosePrompt(set, round, (k) => usedIn(log, k), new Set(s.asked), Math.max(1, alive.length), rng(seedFor(s.seed, round, 1)));
   if (i < 0) { s.status = "over"; s.winners = alive.map((p) => p.id); return; }
@@ -97,7 +108,19 @@ function nextRound(s: LiveState, set: SameSet, now: number) {
     deadline: now + s.seconds * 1000, answers: {}, status: "answering", asked: [...s.asked, i], revealUntil: undefined });
 }
 
-function resolve(s: LiveState, set: SameSet, now: number) {
+function resolve(s: LiveState, g: Game, now: number) {
+  if (s.game === "math") {
+    const alive = s.players.filter((x) => x.alive);
+    const rows: RevealRow[] = alive.map((x) => {
+      const a = s.answers[x.id]?.answer ?? null;
+      const verdict: Verdict = a == null ? "none" : a === s.site ? "ok" : "wrong";
+      if (verdict === "ok") x.streak++; else { x.alive = false; x.outRound = s.round; }
+      return { id: x.id, name: x.name, typed: s.answers[x.id]?.typed ?? "", answer: a, verdict };
+    });
+    s.last = { round: s.round, prompt: s.promptText, site: s.site, rows };
+    return endCheck(s, alive, now);
+  }
+  const set = g.set!;
   const log = s.used && !Array.isArray(s.used) ? s.used : {};
   const p = set.prompts[s.prompt], used = usedIn(log, s.prompt);
   const alive = s.players.filter((x) => x.alive);
@@ -111,6 +134,10 @@ function resolve(s: LiveState, set: SameSet, now: number) {
   s.used = addSaid(log, s.prompt, [...newly]);
   s.last = { round: s.round, prompt: p.text, site: s.site,
     rows: alive.map((x) => ({ id: x.id, name: x.name, typed: s.answers[x.id]?.typed ?? "", answer: picks[x.id], verdict: v[x.id] })) };
+  endCheck(s, alive, now);
+}
+
+function endCheck(s: LiveState, alive: Player[], now: number) {
   const still = s.players.filter((x) => x.alive);
   const solo = s.players.length === 1;
   if (solo ? still.length === 0 : still.length <= 1) {
@@ -118,17 +145,17 @@ function resolve(s: LiveState, set: SameSet, now: number) {
     s.winners = still.length ? still.map((x) => x.id) : alive.map((x) => x.id); // everyone left went out together: they share the win
   }
   s.status = "reveal";
-  s.revealUntil = now + REVEAL_MS;
+  s.revealUntil = now + (s.game === "math" ? 4000 : REVEAL_MS);
 }
 
 /** Moves a live game along by the clock. Returns true when something changed. */
-function tick(s: State, set: SameSet, now: number, force = false) {
+function tick(s: State, g: Game, now: number, force = false) {
   if (s.kind !== "live") return false;
   if (s.status === "answering") {
     const alive = s.players.filter((p) => p.alive);
-    if (now >= s.deadline || alive.every((p) => s.answers[p.id])) { resolve(s, set, now); return true; }
+    if (now >= s.deadline || alive.every((p) => s.answers[p.id])) { resolve(s, g, now); return true; }
   } else if (s.status === "reveal" && (force || now >= (s.revealUntil ?? 0))) {
-    if (s.ending) s.status = "over"; else nextRound(s, set, now);
+    if (s.ending) s.status = "over"; else nextRound(s, g, now);
     return true;
   }
   return false;
@@ -138,11 +165,11 @@ function tick(s: State, set: SameSet, now: number, force = false) {
 function view(s: State, me: string, now: number) {
   if (s.kind === "async") {
     const results = [...s.results].sort((a, b) => b.streak - a.streak || a.at - b.at).slice(0, 100);
-    return { kind: s.kind, title: s.title, seed: s.seed, hostName: s.hostName, isHost: s.host === me, results, mine: s.results.find((r) => r.id === me) ?? null, now };
+    return { kind: s.kind, game: s.game ?? "same", title: s.title, seed: s.seed, hostName: s.hostName, isHost: s.host === me, results, mine: s.results.find((r) => r.id === me) ?? null, now };
   }
   const meP = s.players.find((p) => p.id === me) ?? null;
   return {
-    kind: s.kind, title: s.title, status: s.status, seconds: s.seconds, hostName: s.hostName, isHost: s.host === me, now,
+    kind: s.kind, game: s.game ?? "same", title: s.title, status: s.status, seconds: s.seconds, hostName: s.hostName, isHost: s.host === me, now,
     round: s.round, promptText: s.promptText, level: s.level, deadline: s.deadline, revealUntil: s.revealUntil ?? 0, ending: !!s.ending,
     players: s.players.map((p) => ({ id: p.id, name: p.name, alive: p.alive, streak: p.streak, answered: !!s.answers[p.id], outRound: p.outRound })),
     me: meP, myAnswer: s.answers[me]?.typed ?? null, used: s.status === "answering" && s.used && !Array.isArray(s.used) ? s.used[String(s.prompt)] ?? [] : [],
@@ -156,9 +183,9 @@ export async function poll(code: string, me: string) {
   if (!cur) return { error: "No game with that code. Check it and try again." };
   const now = Date.now();
   if (cur.state.kind === "live" && (cur.state.status === "answering" || cur.state.status === "reveal")) {
-    const { set } = await loadSet(cur.state.chapterId);
+    const g = await loadSet(cur.state.chapterId);
     const s = structuredClone(cur.state);
-    if (tick(s, set, now)) {
+    if (tick(s, g, now)) {
       if (await write(code, cur.version, s)) return { view: view(s, me, now) };
       const again = await read(code);
       if (again) return { view: view(again.state, me, now) };
@@ -182,26 +209,27 @@ export async function join(code: string, me: string, name: string) {
 }
 
 export async function start(code: string, me: string) {
-  const r = await mutate(code, (s, set) => {
+  const r = await mutate(code, (s, g) => {
     if (s.kind !== "live") return "This is a challenge, not a live game.";
     if (s.host !== me) return "Only the host can start.";
     if (s.status !== "lobby") return;
     if (!s.players.length) return "Wait for at least one player to join.";
-    nextRound(s, set, Date.now());
+    nextRound(s, g, Date.now());
   });
   return "error" in r ? r : { view: view(r.state!, me, Date.now()) };
 }
 
 export async function answer(code: string, me: string, typed: string) {
-  const r = await mutate(code, (s, set) => {
+  const r = await mutate(code, (s, g) => {
     if (s.kind !== "live" || s.status !== "answering") return "Answers are closed for this round.";
     const p = s.players.find((x) => x.id === me);
     if (!p?.alive) return "You're out of this game. Watch how it ends!";
     if (Date.now() > s.deadline + 1500) return "Time's up for this round.";
-    const a = makeResolver(set)(typed);
-    if (!a) return `We don't know that ${set.noun}. Pick one from the list.`;
+    let a: string | null;
+    if (s.game === "math") { const n = readNumber(typed); if (n == null) return "Type a whole number."; a = String(n); }
+    else { a = makeResolver(g.set!)(typed); if (!a) return `We don't know that ${g.set!.noun}. Pick one from the list.`; }
     s.answers[me] = { typed: typed.trim().slice(0, 80), answer: a };
-    tick(s, set, Date.now());
+    tick(s, g, Date.now());
   });
   return "error" in r ? r : { view: view(r.state!, me, Date.now()) };
 }
@@ -219,11 +247,11 @@ export async function restart(code: string, me: string) {
 
 /** Host: skip the reveal pause (or end a round early when everyone's stuck). */
 export async function advance(code: string, me: string) {
-  const r = await mutate(code, (s, set) => {
+  const r = await mutate(code, (s, g) => {
     if (s.kind !== "live" || s.host !== me) return "Only the host can do that.";
     const now = Date.now();
-    if (s.status === "answering") { s.deadline = now; tick(s, set, now); }
-    else if (s.status === "reveal") tick(s, set, now, true);
+    if (s.status === "answering") { s.deadline = now; tick(s, g, now); }
+    else if (s.status === "reveal") tick(s, g, now, true);
   });
   return "error" in r ? r : { view: view(r.state!, me, Date.now()) };
 }

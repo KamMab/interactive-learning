@@ -6,7 +6,7 @@ export type SameAnswer = { name: string; aka?: string[]; w?: number }; // w: how
 export type SamePrompt = { text: string; level: number; answers: string[]; first?: boolean };
 export type SameSet = { noun: string; answers: SameAnswer[]; prompts: SamePrompt[] };
 
-export type Verdict = "ok" | "invalid" | "used" | "site" | "twin" | "none";
+export type Verdict = "ok" | "invalid" | "used" | "site" | "twin" | "none" | "wrong";
 export const VERDICT_TEXT: Record<Verdict, string> = {
   ok: "Safe",
   invalid: "Doesn't fit",
@@ -14,6 +14,7 @@ export const VERDICT_TEXT: Record<Verdict, string> = {
   site: "Same as the site",
   twin: "Same as another player",
   none: "No answer",
+  wrong: "Wrong answer",
 };
 
 /** Shape check for content coming from the database or an uploaded file. */

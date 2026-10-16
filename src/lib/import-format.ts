@@ -2,6 +2,7 @@
 // The same rules guide Claude when the site builds a set itself.
 import { uid } from "./id";
 import { cleanSame } from "./same";
+import { cleanMath } from "./math";
 import { MAP_NAMES } from "./map-names";
 import { DEFAULT_SETTINGS, MODES, cleanTools, modeCount, type ChapterContent, type ChapterSettings, type Mode } from "./types";
 
@@ -79,6 +80,7 @@ export function cleanSet(out: any): { content: ChapterContent; settings: Chapter
     map: null,
     tools: cleanTools(out?.tools),
     same: cleanSame(out?.same),
+    math: cleanMath(out?.math),
   };
   const m = out?.map;
   if (m && (m.region === "us-states" || m.region === "world") && Array.isArray(m.items)) {
@@ -87,7 +89,7 @@ export function cleanSet(out: any): { content: ChapterContent; settings: Chapter
       .filter((it: { place: string; prompt: string }) => it.place && it.prompt);
     if (items.length) content.map = { region: m.region, ask: String(m.ask || "Find").slice(0, 120), items };
   }
-  if (!content.terms.length && !content.questions.length && !content.map && !content.same) return { error: "There's nothing to study in it yet: it needs terms, questions or map places." };
+  if (!content.terms.length && !content.questions.length && !content.map && !content.same && !content.math) return { error: "There's nothing to study in it yet: it needs terms, questions or map places." };
   let modes = [...new Set(arr(out?.modes) as string[])].filter((x): x is Mode => (MODES as readonly string[]).includes(x) && modeCount(x as Mode, content) > 0);
   if (!modes.length) modes = MODES.filter((x) => modeCount(x, content) > 0);
   return { content, settings: { ...DEFAULT_SETTINGS, modes }, title: typeof out?.title === "string" ? out.title : undefined };

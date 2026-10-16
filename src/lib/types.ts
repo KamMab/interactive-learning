@@ -1,4 +1,5 @@
 import { cleanSame, type SameSet } from "./same";
+import { cleanMath, type MathSpec } from "./math";
 /** Every item can belong to one section of a long chapter (Section.id). */
 /** image: a picture shown instead of the front text (an https URL, or "wiki:<Wikipedia page>" for its main photo). */
 export type Term = { id: string; term: string; definition: string; section?: string; image?: string };
@@ -46,6 +47,8 @@ export type ChapterContent = {
   tools?: Tool[];
   /** "Don't Say the Same Thing as Me": prompts, their fitting answers, and how obvious each answer is. */
   same?: SameSet;
+  /** "Math Blitz": generated arithmetic that gets harder as you go. */
+  math?: MathSpec;
 };
 
 export const TOOLS = ["interest-tables"] as const;
@@ -55,17 +58,18 @@ export const cleanTools = (x: unknown): Tool[] | undefined => {
   return t.length ? [...new Set(t)] : undefined;
 };
 
-export const MODES = ["same", "learn", "flashcards", "quiz", "map", "entries", "match", "rush"] as const;
+export const MODES = ["same", "math", "learn", "flashcards", "quiz", "map", "entries", "match", "rush"] as const;
 export type Mode = (typeof MODES)[number];
 
 /** Every set gets these three when it has the content for them. */
-export const CORE_MODES: Mode[] = ["same", "learn", "flashcards", "quiz"];
+export const CORE_MODES: Mode[] = ["same", "math", "learn", "flashcards", "quiz"];
 /** Extra ways to study, added when they fit the material (or the student asks for them). */
 export const EXTRA_MODES: Mode[] = ["map", "entries", "match", "rush"];
 
-type ContentKey = "terms" | "questions" | "entries" | "map" | "same";
+type ContentKey = "terms" | "questions" | "entries" | "map" | "same" | "math";
 export const MODE_INFO: Record<Mode, { name: string; blurb: string; needs: ContentKey[]; game?: boolean }> = {
   same: { name: "Don't Say the Same", blurb: "Name something that fits, but not what the site (or anyone else) says.", needs: ["same"], game: true },
+  math: { name: "Math Blitz", blurb: "Quick math problems that get harder until you miss one.", needs: ["math"], game: true },
   learn: { name: "Learn", blurb: "Short rounds that repeat what you miss until you've mastered it.", needs: ["terms", "questions"] },
   flashcards: { name: "Flashcards", blurb: "Flip through key terms and sort what you know.", needs: ["terms"] },
   quiz: { name: "Quick-fire", blurb: "Multiple choice with explanations and a speed bonus.", needs: ["questions"] },
@@ -94,7 +98,7 @@ export const usableSections = (c: ChapterContent) =>
 
 /** How many items a mode has to work with in this chapter (0 = the mode is hidden). */
 export const modeCount = (mode: Mode, c: ChapterContent) =>
-  MODE_INFO[mode].needs.reduce((n, k) => n + (k === "map" ? c.map?.items.length ?? 0 : k === "same" ? c.same?.prompts.length ?? 0 : c[k].length), 0);
+  MODE_INFO[mode].needs.reduce((n, k) => n + (k === "map" ? c.map?.items.length ?? 0 : k === "same" ? c.same?.prompts.length ?? 0 : k === "math" ? (c.math ? 1 : 0) : c[k].length), 0);
 
 /** Card side names for this content ("Term"/"Definition" unless Claude chose better ones). */
 export const sideLabels = (c: ChapterContent) => c.labels ?? { front: "Term", back: "Definition" };
@@ -111,7 +115,7 @@ export type ChapterSettings = {
 };
 
 export const DEFAULT_SETTINGS: ChapterSettings = {
-  modes: ["same", "learn", "flashcards", "quiz", "map", "entries", "match", "rush"],
+  modes: ["same", "math", "learn", "flashcards", "quiz", "map", "entries", "match", "rush"],
   questionCount: 10,
   rushSeconds: 60,
   matchPairs: 6,
@@ -149,7 +153,7 @@ export type Profile = { user_id: string; handle: string; display_name: string };
 /** A chapter shown on Home/Library cards, with where it lives and who made it. */
 export type SetCard = {
   chapterId: string; href: string; title: string; course: string; kind: "class" | "fun" | "official";
-  terms: number; questions: number; author?: Profile | null; plays?: number; visibility?: "public" | "private"; hasMap?: boolean; party?: number;
+  terms: number; questions: number; author?: Profile | null; plays?: number; visibility?: "public" | "private"; hasMap?: boolean; party?: number; mathGame?: boolean;
 };
 
 export type Professor = {
@@ -207,6 +211,7 @@ export function normalizeContent(c: Partial<ChapterContent> | null | undefined):
     map: c?.map?.items?.length ? c.map : null,
     tools: cleanTools(c?.tools),
     same: c?.same ? cleanSame(c.same) : undefined,
+    math: cleanMath(c?.math),
   };
 }
 

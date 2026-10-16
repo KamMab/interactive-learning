@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Combo from "../Combo";
 import { VERDICT_TEXT, addSaid, choosePrompt, examples, judgeRound, makeResolver, rng, seedFor, sitePick, usedIn, type SaidLog, type SameSet, type Verdict } from "@/lib/same";
 
-export type RunEnd = { streak: number; prompt: string; mine: string; site: string; verdict: Verdict; examples: string[] };
+export type RunEnd = { streak: number; prompt: string; mine: string; site: string; verdict: Verdict; examples: string[]; math?: boolean };
 
 /** One player against the site. With a seed (a challenge code), everyone gets the same game. */
 export default function SoloRun({ set, seed, onOver, label }: { set: SameSet; seed?: number; onOver: (e: RunEnd) => void; label?: string }) {

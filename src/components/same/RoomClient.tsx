@@ -3,6 +3,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Combo from "../Combo";
 import SoloRun, { type RunEnd } from "./SoloRun";
+import MathRun from "./MathRun";
+import { MathRules } from "./MathGame";
 import JoinBox from "./JoinBox";
 import { Rules, RunOver, StreakBoard } from "./SameGame";
 import { room, saveName, savedName } from "./player";
@@ -43,8 +45,9 @@ function Countdown({ until, offset }: { until: number; offset: number }) {
   return <span className={`pill${left <= 5 ? " low" : ""}`}><b>{left}s</b></span>;
 }
 
-function Live({ code, v, offset, set, act, err, href }: { code: string; v: LiveView; offset: number; set: SameSet; act: (op: string, extra?: object) => Promise<void>; err: string; href: string }) {
-  const names = useMemo(() => set.answers.map((a) => a.name).sort((a, b) => a.localeCompare(b)), [set]);
+function Live({ code, v, offset, set, act, err, href }: { code: string; v: LiveView; offset: number; set?: SameSet; act: (op: string, extra?: object) => Promise<void>; err: string; href: string }) {
+  const math = v.game === "math";
+  const names = useMemo(() => (set ? set.answers.map((a) => a.name).sort((a, b) => a.localeCompare(b)) : []), [set]);
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => setTyped(""), [v.round]);
@@ -65,7 +68,7 @@ function Live({ code, v, offset, set, act, err, href }: { code: string; v: LiveV
           <ul className="room-players">{v.players.map((p) => <li key={p.id} className={p.id === me?.id ? "me" : ""}>{p.name}</li>)}</ul>
           {!v.players.length && <p className="note">Players show up here as they join.</p>}
         </section>
-        <section className="card p-5"><span className="eyebrow">Live rules</span><Rules noun={set.noun} /><p className="note mt-2">Live games add one more rule: if you say the same thing as another player, you&apos;re both out. Last one standing wins.</p></section>
+        <section className="card p-5"><span className="eyebrow">Live rules</span>{math || !set ? <><MathRules /><p className="note mt-2">Everyone gets the same problem at once. Last one standing wins.</p></> : <><Rules noun={set.noun} /><p className="note mt-2">Live games add one more rule: if you say the same thing as another player, you&apos;re both out. Last one standing wins.</p></>}</section>
       </div>
     );
   }
@@ -78,8 +81,8 @@ function Live({ code, v, offset, set, act, err, href }: { code: string; v: LiveV
         <section className="card p-6 enter">
           <span className="eyebrow">Game over · {v.round} rounds</span>
           <p className="verdict">{winners.length === 1 ? `${winners[0].name} wins!` : winners.length > 1 ? `Tie: ${winners.map((w) => w.name).join(" & ")}` : "Game over"}</p>
-          {v.last && <p className="mt-3 text-muted">Last question: “{v.last.prompt}”. I said <b className="text-ink">{v.last.site}</b>.</p>}
-          {v.last && <ul className="room-rows mt-3">{v.last.rows.map((r) => <li key={r.id} className={r.verdict === "ok" ? "good" : "bad"}><span className="nm">{r.name}</span><span className="ans">{r.answer ?? "—"}</span><span className="vd">{VERDICT_TEXT[r.verdict]}</span></li>)}</ul>}
+          {v.last && <p className="mt-3 text-muted">{math ? <>Last problem: {v.last.prompt} = <b className="text-ink">{v.last.site}</b>.</> : <>Last question: “{v.last.prompt}”. I said <b className="text-ink">{v.last.site}</b>.</>}</p>}
+          {v.last && <ul className="room-rows mt-3">{v.last.rows.map((r) => <li key={r.id} className={r.verdict === "ok" ? "good" : "bad"}><span className="nm">{r.name}</span><span className="ans">{r.answer ?? "—"}</span><span className="vd">{math && r.verdict === "ok" ? "Correct" : VERDICT_TEXT[r.verdict]}</span></li>)}</ul>}
         </section>
         <section className="card p-5">
           <span className="eyebrow">Final standings</span>
@@ -102,29 +105,30 @@ function Live({ code, v, offset, set, act, err, href }: { code: string; v: LiveV
         {v.status === "answering" ? <Countdown until={v.deadline} offset={offset} /> : <Countdown until={v.revealUntil} offset={offset} />}
       </div>
       <section className="sheet same-sheet enter" key={`${v.round}-${v.status}`}>
-        <span className="tag">{v.status === "answering" ? "Don't say the same thing as me" : `Round ${v.round} results`}</span>
-        <p className="same-prompt">{v.status === "answering" ? v.promptText : v.last?.prompt}</p>
+        <span className="tag">{v.status === "answering" ? (math ? "Math Blitz" : "Don't say the same thing as me") : `Round ${v.round} results`}</span>
+        <p className={math ? "math-q" : "same-prompt"}>{v.status === "answering" ? v.promptText : v.last?.prompt}{math ? " = ?" : ""}</p>
         {v.status === "answering" ? (
           me?.alive ? (v.myAnswer ? (
             <p className="fb"><strong>Locked in: {v.myAnswer}</strong><br />Waiting for the others ({answered} of {alive.length} in).</p>
           ) : (
             <>
-              <p className="same-lock"><span aria-hidden>🔒</span> I&apos;ve locked in my answer. Don&apos;t match me or anyone else.</p>
+              {!math && <p className="same-lock"><span aria-hidden>🔒</span> I&apos;ve locked in my answer. Don&apos;t match me or anyone else.</p>}
               <form className="same-form" onSubmit={async (e) => { e.preventDefault(); if (!typed.trim()) return; setBusy(true); await act("answer", { answer: typed }); setBusy(false); }}>
-                <Combo id="room-answer" value={typed} onChange={setTyped} options={names} placeholder={`Type a ${set.noun}`} />
+                {math || !set ? <input id="room-answer" className="input mono math-in" inputMode="numeric" autoComplete="off" autoFocus value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Answer" aria-label="Your answer" />
+                  : <Combo id="room-answer" value={typed} onChange={setTyped} options={names} placeholder={`Type a ${set.noun}`} />}
                 <button className="btn" disabled={!typed.trim() || busy}>Lock it in</button>
               </form>
             </>
           )) : <p className="note">{me ? "You're out. Watch who survives!" : "Watching."} {answered} of {alive.length} have answered.</p>
         ) : v.last && (
           <div className="enter">
-            <div className="same-card site big"><span>I said</span><b>{v.last.site}</b></div>
+            <div className="same-card site big"><span>{math ? "Answer" : "I said"}</span><b>{v.last.site}</b></div>
             <ul className="room-rows">
               {v.last.rows.map((r) => (
                 <li key={r.id} className={r.verdict === "ok" ? "good" : "bad"}>
                   <span className="nm">{r.name}{r.id === me?.id ? " (you)" : ""}</span>
                   <span className="ans">{r.answer ?? "—"}</span>
-                  <span className="vd">{VERDICT_TEXT[r.verdict]}</span>
+                  <span className="vd">{math && r.verdict === "ok" ? "Correct" : VERDICT_TEXT[r.verdict]}</span>
                 </li>
               ))}
             </ul>
@@ -147,7 +151,7 @@ function Live({ code, v, offset, set, act, err, href }: { code: string; v: LiveV
   );
 }
 
-function Challenge({ code, v, set, chapterId, act }: { code: string; v: AsyncView; set: SameSet; chapterId: string; act: (op: string, extra?: object) => Promise<void> }) {
+function Challenge({ code, v, set, chapterId, act }: { code: string; v: AsyncView; set?: SameSet; chapterId: string; act: (op: string, extra?: object) => Promise<void> }) {
   const [name, setName] = useState<string | null>(null);
   const [run, setRun] = useState(0);
   const [end, setEnd] = useState<RunEnd | null>(null);
@@ -165,14 +169,15 @@ function Challenge({ code, v, set, chapterId, act }: { code: string; v: AsyncVie
         : <p className="note mt-2">No one has played yet.</p>}
     </section>
   );
-  if (name && !end) return <SoloRun key={run} set={set} seed={v.seed} label={`Challenge ${code}`} onOver={over} />;
+  if (name && !end) return v.game === "math" || !set ? <MathRun key={run} seed={v.seed} label={`Challenge ${code}`} onOver={over} />
+    : <SoloRun key={run} set={set} seed={v.seed} label={`Challenge ${code}`} onOver={over} />;
   if (end) return <div className="flex flex-col gap-4"><RunOver end={end} saved={saved} onAgain={() => { setEnd(null); setSaved(null); setRun((r) => r + 1); }} />{board}</div>;
   return (
     <div className="flex flex-col gap-4">
       <section className="card p-5">
         <span className="eyebrow">Challenge from {v.hostName}</span>
         <p className="mt-1 text-muted">Everyone with this code gets the same game against me. Play whenever you like; your best streak goes on the board.</p>
-        <Rules noun={set.noun} />
+        {v.game === "math" || !set ? <MathRules /> : <Rules noun={set.noun} />}
       </section>
       {v.isHost && <Code code={code} />}
       <NameForm label={v.mine ? "Play again" : "Start the challenge"} onName={(n) => { setName(n); setRun((r) => r + 1); }} />
@@ -181,7 +186,7 @@ function Challenge({ code, v, set, chapterId, act }: { code: string; v: AsyncVie
   );
 }
 
-export default function RoomClient({ code, set, chapterId, title, href }: { code: string; set: SameSet; chapterId: string; title: string; href: string }) {
+export default function RoomClient({ code, set, chapterId, title, href }: { code: string; set?: SameSet; chapterId: string; title: string; href: string }) {
   const [v, setV] = useState<RoomView | null>(null);
   const [err, setErr] = useState(""), [fatal, setFatal] = useState("");
   const offset = useRef(0);
@@ -204,7 +209,7 @@ export default function RoomClient({ code, set, chapterId, title, href }: { code
     <div className="mx-auto flex game-col flex-col gap-4">
       <div>
         <span className="eyebrow">{v.kind === "live" ? "Live game" : "Challenge"} · <Link href={href} className="underline">{title}</Link></span>
-        <h1 className="mt-1 text-[28px] font-bold leading-tight">Don&apos;t Say the Same Thing as Me</h1>
+        <h1 className="mt-1 text-[28px] font-bold leading-tight">{v.game === "math" ? "Math Blitz" : <>Don&apos;t Say the Same Thing as Me</>}</h1>
       </div>
       {v.kind === "live" ? <Live code={code} v={v} offset={offset.current} set={set} act={act} err={err} href={href} /> : <Challenge code={code} v={v} set={set} chapterId={chapterId} act={act} />}
       {v.kind === "async" && <StreakBoard chapterId={chapterId} />}

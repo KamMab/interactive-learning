@@ -191,6 +191,7 @@ async function cardsFor(courses: Course[], plays?: Map<string, number>, onlyChap
         visibility: c.owner_id ? c.visibility ?? "public" : "public",
         hasMap: !!content.map?.items.length,
         party: content.same?.prompts.length || undefined,
+        mathGame: !!content.math || undefined,
       } as SetCard;
     });
 }

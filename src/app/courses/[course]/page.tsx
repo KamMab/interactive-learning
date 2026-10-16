@@ -74,7 +74,7 @@ export default async function CoursePage({ params }: { params: Promise<{ course:
                 ? <div className="book-cover fun"><span className="eyebrow">Game</span><span className="ttl text-[24px]">{ch.title}</span></div>
                 : <div className="book-cover"><span className="eyebrow">Chapter</span><span className="num">{chapterLabel(ch).num}</span><span className="ttl">{chapterLabel(ch).title}</span></div>}
               <div className="book-body">
-                {ch.content.same ? <>Party game · <b>{ch.content.same.prompts.length}</b> questions<br />Play me, a friend or a whole class</> : <>
+                {ch.content.math ? <>Math game · endless problems<br />Play solo, with a friend or a whole class</> : ch.content.same ? <>Party game · <b>{ch.content.same.prompts.length}</b> questions<br />Play me, a friend or a whole class</> : <>
                 {ch.content.map?.items.length ? <><b>{ch.content.map.items.length}</b> places · </> : null}
                 <b>{ch.content.terms.length}</b> {fun ? "cards" : "terms"} · <b>{ch.content.questions.length}</b> questions</>}
                 {secs > 1 && <> · <b>{secs}</b> sections</>}

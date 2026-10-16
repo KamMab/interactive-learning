@@ -11,7 +11,7 @@ type Chips = { key: "count" | "pairs" | "seconds"; label: string; list: number[]
 
 function optionChips(mode: Mode, chapter: Chapter): Chips {
   const c = chapter.content, s = chapter.settings;
-  if (mode === "same") return { key: "count", label: "", list: [], def: 0, fmt: String }; // endless: no round size to pick
+  if (mode === "same" || mode === "math") return { key: "count", label: "", list: [], def: 0, fmt: String }; // endless: no round size to pick
   if (mode === "learn") return { key: "count", label: "Per round", list: [5, 7, 10], def: 7, fmt: (n) => String(n) };
   if (mode === "match") {
     const max = c.terms.length, def = Math.min(s.matchPairs, max);

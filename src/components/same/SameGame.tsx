@@ -47,7 +47,10 @@ export function RunOver({ end, onAgain, onHome, saved }: { end: RunEnd; onAgain:
     <section className="card p-6 enter">
       <span className="eyebrow">Game over</span>
       <p className="verdict">{end.streak} in a row</p>
-      {end.prompt && (
+      {end.prompt && end.math && (
+        <p className="mt-3 text-muted"><b className="text-ink">{end.verdict === "none" ? "Time's up." : "Wrong answer."}</b> {end.prompt} = <b className="text-ink">{end.site}</b>{end.mine ? <>; you said {end.mine}.</> : "."}</p>
+      )}
+      {end.prompt && !end.math && (
         <p className="mt-3 text-muted">
           <b className="text-ink">{VERDICT_TEXT[end.verdict]}.</b> “{end.prompt}”: you said <b className="text-ink">{end.mine}</b>{end.verdict === "site" ? ", and so did I." : `; I said ${end.site}.`}
           {end.examples.length > 0 && <> Ones that would have worked: {end.examples.join(", ")}.</>}
@@ -62,12 +65,12 @@ export function RunOver({ end, onAgain, onHome, saved }: { end: RunEnd; onAgain:
   );
 }
 
-function HostForm({ chapterId, onCancel }: { chapterId: string; onCancel: () => void }) {
+export function HostForm({ chapterId, onCancel, math = false }: { chapterId: string; onCancel: () => void; math?: boolean }) {
   const router = useRouter();
   const [kind, setKind] = useState<"live" | "async">("live");
   const [name, setName] = useState(savedName());
   const [plays, setPlays] = useState(true);
-  const [seconds, setSeconds] = useState(30);
+  const [seconds, setSeconds] = useState(math ? 15 : 30);
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
   async function go(e: React.FormEvent) {
     e.preventDefault();
@@ -85,8 +88,9 @@ function HostForm({ chapterId, onCancel }: { chapterId: string; onCancel: () => 
         <button type="button" aria-pressed={kind === "async"} onClick={() => setKind("async")}>Challenge</button>
       </div>
       <p className="text-sm text-muted">{kind === "live"
-        ? "Everyone answers the same question at the same time, like Kahoot. Match me OR another player and you're out. Last one standing wins. Great for a class."
-        : "Everyone plays the same game against me whenever they like. Longest streak tops the challenge's board."}</p>
+        ? math ? "Everyone gets the same problem at the same time, like Kahoot. Wrong or too slow and you're out. Problems get harder; last one standing wins. Great for a class."
+          : "Everyone answers the same question at the same time, like Kahoot. Match me OR another player and you're out. Last one standing wins. Great for a class."
+        : math ? "Everyone gets the same problems whenever they like. Longest streak tops the challenge's board." : "Everyone plays the same game against me whenever they like. Longest streak tops the challenge's board."}</p>
       <label className="flex flex-col gap-1 text-sm font-bold">Your name<input className="input max-w-xs" value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder="e.g. Ms. Rivera" /></label>
       {kind === "live" && (
         <>

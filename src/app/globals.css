@@ -553,3 +553,6 @@ button.trow.sel{background:var(--ok-soft);border-color:color-mix(in srgb,var(--a
 .party-pick.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
 .party-check{flex:none;width:24px;height:24px;border-radius:7px;border:1.5px solid var(--line-strong);display:grid;place-items:center;font-weight:800;color:var(--accent-ink)}
 .party-pick.on .party-check{background:var(--accent);border-color:var(--accent)}
+.math-q{font-family:var(--f-mono);font-weight:700;font-size:clamp(40px,9vw,64px);line-height:1.1;margin:18px 0 18px;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.math-in{font-size:24px;padding:12px 16px;font-weight:700}
+.math-sheet.ok{border-color:var(--good)}
