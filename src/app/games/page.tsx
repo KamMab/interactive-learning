@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listStudentSets } from "@/lib/db";
 import SetShelf from "@/components/SetShelf";
+import JoinBox from "@/components/same/JoinBox";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export default async function EduGames() {
         </div>
         <Link href="/upload" className="btn">Make a game</Link>
       </div>
+      <JoinBox />
       {maps.length > 0 && <section className="flex flex-col gap-4"><h2 className="text-[24px] font-bold">Map games</h2><SetShelf cards={maps} /></section>}
       <section className="flex flex-col gap-4">
         <h2 className="text-[24px] font-bold">{maps.length ? "Quizzes and trivia" : "All games"}</h2>

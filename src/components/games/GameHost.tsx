@@ -7,6 +7,7 @@ import Match from "./Match";
 import Rush from "./Rush";
 import Entries from "./Entries";
 import MapGame from "./MapGame";
+import SameGame from "../same/SameGame";
 
 export type RoundOpts = { count?: number; pairs?: number; seconds?: number };
 export type GP = {
@@ -17,4 +18,4 @@ export type GP = {
 
 // To add a new game: build a component that takes GP, add its id to MODES and MODE_INFO in lib/types.ts,
 // and add it here. It then shows up on every chapter page and in the admin mode settings.
-export const GAMES: Record<Mode, (p: GP) => React.ReactNode> = { learn: Learn, flashcards: Flashcards, quiz: Quiz, map: MapGame, entries: Entries, match: Match, rush: Rush };
+export const GAMES: Record<Mode, (p: GP) => React.ReactNode> = { same: SameGame, learn: Learn, flashcards: Flashcards, quiz: Quiz, map: MapGame, entries: Entries, match: Match, rush: Rush };

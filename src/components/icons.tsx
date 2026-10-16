@@ -22,6 +22,7 @@ export const ICON = {
   award: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><circle cx="12" cy="9" r="6" /><path d="m8.5 14 -1.5 7 5-2.5 5 2.5-1.5-7" /><path d="m12 6.2.9 1.8 2 .3-1.4 1.4.3 2-1.8-.9-1.8.9.3-2-1.4-1.4 2-.3z" /></svg>,
   podium: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M9 21V9h6v12M3 21v-7h6M15 21v-5h6v5M2 21h20" /><path d="m12 2.8.8 1.6 1.7.2-1.2 1.2.3 1.7-1.6-.8-1.6.8.3-1.7-1.2-1.2 1.7-.2z" /></svg>,
   upload: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></svg>,
+  same: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round"><path d="M3 5.5A2.5 2.5 0 0 1 5.5 3h6A2.5 2.5 0 0 1 14 5.5v3A2.5 2.5 0 0 1 11.5 11H7l-3 2.5V11a2.5 2.5 0 0 1-1-2z"/><path d="M10 14.5a2.5 2.5 0 0 0 2.5 2.5H17l3 2.5V17a2.5 2.5 0 0 0 1-2v-3a2.5 2.5 0 0 0-2.5-2.5H17"/><path d="M6.5 6.2h4M6.5 8h4M14.5 13.5l3 0M14.5 15.5l3 0" /></svg>,
   admin: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="16" r="3"/></svg>,
 };
-export const MODE_ICON: Record<Mode, React.ReactNode> = { learn: ICON.learn, map: ICON.map, flashcards: ICON.cards, quiz: ICON.check, match: ICON.grid, rush: ICON.bolt, entries: ICON.pen };
+export const MODE_ICON: Record<Mode, React.ReactNode> = { same: ICON.same, learn: ICON.learn, map: ICON.map, flashcards: ICON.cards, quiz: ICON.check, match: ICON.grid, rush: ICON.bolt, entries: ICON.pen };

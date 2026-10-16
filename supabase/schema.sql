@@ -173,3 +173,25 @@ create policy "update own leaderboard" on leaderboard for update using (auth.uid
 -- ============ Courses by author ============
 -- Each student's course is their own version ("MATH 1 by kam"); the professor is just a label on it.
 alter table courses add column if not exists professor text;
+
+-- ============ "Don't Say the Same Thing as Me": streak leaderboard and games with join codes ============
+create table if not exists game_records (
+  chapter_id uuid not null references chapters(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  best int not null default 0,
+  updated_at timestamptz default now(),
+  primary key (chapter_id, user_id)
+);
+create index if not exists game_records_top on game_records (chapter_id, best desc, updated_at);
+alter table game_records enable row level security;
+
+create table if not exists game_rooms (
+  code text primary key,
+  chapter_id uuid references chapters(id) on delete cascade,
+  kind text not null default 'live',
+  state jsonb not null,
+  version int not null default 0,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+alter table game_rooms enable row level security;

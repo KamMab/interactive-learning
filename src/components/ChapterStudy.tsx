@@ -11,6 +11,7 @@ type Chips = { key: "count" | "pairs" | "seconds"; label: string; list: number[]
 
 function optionChips(mode: Mode, chapter: Chapter): Chips {
   const c = chapter.content, s = chapter.settings;
+  if (mode === "same") return { key: "count", label: "", list: [], def: 0, fmt: String }; // endless: no round size to pick
   if (mode === "learn") return { key: "count", label: "Per round", list: [5, 7, 10], def: 7, fmt: (n) => String(n) };
   if (mode === "match") {
     const max = c.terms.length, def = Math.min(s.matchPairs, max);
@@ -134,7 +135,7 @@ export default function ChapterStudy({ chapter, label, initialMode, initialSecti
             {mode && <span className="stage-ic">{MODE_ICON[mode]}</span>}
             <div className="min-w-0"><span className="eyebrow">{secTitle ? `Studying · ${secTitle}` : "Studying"}</span><h2 className="text-[24px] font-bold">{mode ? modeName(mode, chapter.content) : "…"}</h2></div>
           </div>
-          {oc && (
+          {oc && oc.list.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
               <span className="note">{oc.label}</span>
               {oc.list.map((n) => (
@@ -150,7 +151,7 @@ export default function ChapterStudy({ chapter, label, initialMode, initialSecti
         ) : !picked.length ? <p className="card p-5 text-muted">Pick at least one topic above to study.</p> : modes.length === 0 ? <p className="card p-5 text-muted">Nothing in these topics yet.</p> : <div className="card h-72 animate-pulse" />}
       </section>
 
-      <section id="modes" className="flex flex-col gap-4">
+      {modes.length > 1 && <section id="modes" className="flex flex-col gap-4">
         <h2 className="text-[22px] font-bold">{secTitle ? `Study ${picked.length === 1 ? "this topic" : "these topics"}` : "Study this chapter"}</h2>
         <div className="mtiles">{core.map(tile)}</div>
         {extras.length > 0 && (
@@ -159,7 +160,7 @@ export default function ChapterStudy({ chapter, label, initialMode, initialSecti
             <div className="mtiles">{extras.map(tile)}</div>
           </>
         )}
-      </section>
+      </section>}
     </div>
   );
 }
