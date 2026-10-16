@@ -5,6 +5,7 @@ import Combo from "../Combo";
 import SoloRun, { type RunEnd } from "./SoloRun";
 import MathRun from "./MathRun";
 import { MathRules } from "./MathGame";
+import Pic from "../Pic";
 import JoinBox from "./JoinBox";
 import { Rules, RunOver, StreakBoard } from "./SameGame";
 import { room, saveName, savedName } from "./player";
@@ -151,6 +152,96 @@ function Live({ code, v, offset, set, act, err, href }: { code: string; v: LiveV
   );
 }
 
+function QuizLive({ code, v, offset, act, err, href }: { code: string; v: LiveView; offset: number; act: (op: string, extra?: object) => Promise<void>; err: string; href: string }) {
+  const [busy, setBusy] = useState(false);
+  const me = v.me;
+  const ranked = [...v.players].sort((a, b) => b.score - a.score);
+  const board = (n = 5) => (
+    <ol className="same-top mt-2">{ranked.slice(0, n).map((p) => <li key={p.id} className={p.id === me?.id ? "me" : ""}><span>{p.name}</span><b className="mono">{p.score.toLocaleString()}</b></li>)}</ol>
+  );
+  if (v.status === "lobby") {
+    return (
+      <div className="flex flex-col gap-4">
+        {v.isHost && <Code code={code} />}
+        {!me && !v.isHost && <NameForm label="Join the game" busy={busy} onName={async (n) => { setBusy(true); await act("join", { name: n }); setBusy(false); }} />}
+        {me && !v.isHost && <p className="fb"><strong>You&apos;re in, {me.name}!</strong><br />Waiting for {v.hostName} to start. Watch the screen and tap fast!</p>}
+        <section className="card p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="eyebrow">{v.players.length} player{v.players.length === 1 ? "" : "s"} · {v.count} questions · {v.seconds}s each</span>
+            {v.isHost && <button className="btn" disabled={!v.players.length || busy} onClick={async () => { setBusy(true); await act("start"); setBusy(false); }}>Start the quiz</button>}
+          </div>
+          <ul className="room-players">{v.players.map((p) => <li key={p.id} className={p.id === me?.id ? "me" : ""}>{p.name}</li>)}</ul>
+          {!v.players.length && <p className="note">Players show up here as they join.</p>}
+        </section>
+        <section className="card p-5"><span className="eyebrow">How scoring works</span><p className="mt-2">Everyone sees the same question at once. A right answer is worth up to <b>1,000 points</b>: the faster you answer, the more you get (at least 250). Wrong answers get 0, and nobody is knocked out. Most points after the last question wins.</p></section>
+      </div>
+    );
+  }
+  if (v.status === "over") {
+    const top = ranked.slice(0, 3);
+    return (
+      <div className="flex flex-col gap-4">
+        <section className="card p-6 enter">
+          <span className="eyebrow">Final results · {v.count} questions</span>
+          <p className="verdict">{top[0] && top[0].score > 0 ? `${top[0].name} wins!` : "Game over"}</p>
+          <div className="podium">{[1, 0, 2].map((k) => top[k] ? <div key={k} className={`p${k + 1}`}><span>{k === 0 ? "👑 1st" : k === 1 ? "2nd" : "3rd"}</span><b>{top[k].name}</b><span>{top[k].score.toLocaleString()}</span></div> : <div key={k} className={`p${k + 1}`} style={{ visibility: "hidden" }} />)}</div>
+          {me && <p className="mt-4 text-muted">You finished #{ranked.findIndex((p) => p.id === me.id) + 1} with {me.score?.toLocaleString?.() ?? 0} points ({me.streak} right).</p>}
+        </section>
+        <section className="card p-5"><span className="eyebrow">Everyone</span>{board(100)}</section>
+        {v.isHost
+          ? <div className="flex flex-wrap gap-3"><button className="btn big" disabled={busy} onClick={async () => { setBusy(true); await act("restart"); setBusy(false); }}>Restart with the same code</button><Link className="btn-ghost big" href={href}>Back to the chapter</Link></div>
+          : <p className="note">Waiting for {v.hostName} to restart. You&apos;ll be back in automatically.</p>}
+      </div>
+    );
+  }
+  const q = v.question, last = v.last;
+  const mine = v.myAnswer != null ? Number(v.myAnswer) : null;
+  const myRow = last?.rows.find((r) => r.id === me?.id);
+  const answered = v.players.filter((p) => p.answered).length;
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="mono mr-auto text-[13px] text-muted">Question {v.round} of {v.count} · code {code}</span>
+        {me && <span className="pill"><b>{(me.score ?? 0).toLocaleString()}</b> pts</span>}
+        {v.status === "answering" ? <Countdown until={v.deadline} offset={offset} /> : <Countdown until={v.revealUntil} offset={offset} />}
+      </div>
+      <section className="sheet same-sheet enter" key={`${v.round}-${v.status}`}>
+        <span className="tag">{v.status === "answering" ? `${answered} of ${v.players.length} answered` : "Answer"}</span>
+        {(v.status === "answering" ? q?.image : last?.image) && <Pic src={(v.status === "answering" ? q?.image : last?.image)!} alt="" className="pic-q" />}
+        <p className="quiz-q">{v.status === "answering" ? v.promptText : last?.prompt}</p>
+        {v.status === "answering" && q ? (
+          <>
+            <div className="quiz-opts">
+              {q.choices.map((c, i) => (
+                <button key={i} className={`quiz-opt c${i}${mine != null && mine !== i ? " dim" : ""}`} disabled={!me || mine != null || busy}
+                  onClick={async () => { setBusy(true); await act("answer", { answer: String(i) }); setBusy(false); }}>
+                  <b>{"ABCDEF"[i]}</b><span>{c}</span>
+                </button>
+              ))}
+            </div>
+            {mine != null && <p className="note mt-3">Locked in. Waiting for everyone else…</p>}
+            {!me && <p className="note mt-3">{v.isHost ? "Players answer on their own screens." : "Watching."}</p>}
+          </>
+        ) : last && (
+          <>
+            <div className="quiz-opts">
+              {(last.choices ?? []).map((c, i) => (
+                <div key={i} className={`quiz-opt c${i}${String(i) === last.site ? " right" : " dim"}`}><b>{String(i) === last.site ? "✓" : "ABCDEF"[i]}</b><span>{c}</span><span className="cnt">{last.counts?.[i] ?? 0}</span></div>
+              ))}
+            </div>
+            {myRow && <p className={`fb mt-3${myRow.verdict === "ok" ? "" : " bad"}`}><strong className="quiz-pts">{myRow.verdict === "ok" ? `+${myRow.points}` : myRow.verdict === "none" ? "Too slow" : "Not this time"}</strong><br />{myRow.verdict === "ok" ? `Answered in ${myRow.secs?.toFixed(1) ?? "?"}s. Faster = more points.` : "0 points this round."}</p>}
+            {last.explanation && <p className="note mt-2">{last.explanation}</p>}
+            <div className="mt-4"><span className="eyebrow">Top {Math.min(5, ranked.length)}</span>{board(5)}</div>
+            <p className="note mt-2">{v.ending ? "That was the last question!" : "Next question in a moment."}</p>
+          </>
+        )}
+        {err && <p className="mt-2 text-sm text-bad">{err}</p>}
+        {v.isHost && <div className="mt-4"><button className="btn-ghost" onClick={() => act("next")}>{v.status === "answering" ? "End this question now" : v.ending ? "Show final results" : "Next question now"}</button></div>}
+      </section>
+    </div>
+  );
+}
+
 function Challenge({ code, v, set, chapterId, act }: { code: string; v: AsyncView; set?: SameSet; chapterId: string; act: (op: string, extra?: object) => Promise<void> }) {
   const [name, setName] = useState<string | null>(null);
   const [run, setRun] = useState(0);
@@ -209,9 +300,10 @@ export default function RoomClient({ code, set, chapterId, title, href }: { code
     <div className="mx-auto flex game-col flex-col gap-4">
       <div>
         <span className="eyebrow">{v.kind === "live" ? "Live game" : "Challenge"} · <Link href={href} className="underline">{title}</Link></span>
-        <h1 className="mt-1 text-[28px] font-bold leading-tight">{v.game === "math" ? "Math Blitz" : <>Don&apos;t Say the Same Thing as Me</>}</h1>
+        <h1 className="mt-1 text-[28px] font-bold leading-tight">{v.game === "math" ? "Math Blitz" : v.game === "quiz" ? `Live quiz: ${title}` : <>Don&apos;t Say the Same Thing as Me</>}</h1>
       </div>
-      {v.kind === "live" ? <Live code={code} v={v} offset={offset.current} set={set} act={act} err={err} href={href} /> : <Challenge code={code} v={v} set={set} chapterId={chapterId} act={act} />}
+      {v.kind === "live" && v.game === "quiz" ? <QuizLive code={code} v={v} offset={offset.current} act={act} err={err} href={href} />
+        : v.kind === "live" ? <Live code={code} v={v} offset={offset.current} set={set} act={act} err={err} href={href} /> : <Challenge code={code} v={v} set={set} chapterId={chapterId} act={act} />}
       {v.kind === "async" && <StreakBoard chapterId={chapterId} />}
     </div>
   );

@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     if (!/^[a-z0-9-]{8,64}$/i.test(me)) return NextResponse.json({ error: "Reload the page and try again." });
     if (b.op === "create") {
       return NextResponse.json(await createRoom({ chapterId: String(b.chapterId), kind: b.kind === "async" ? "async" : "live", host: me,
-        hostName: String(b.name ?? ""), hostPlays: !!b.hostPlays, seconds: Number(b.seconds) || 30 }));
+        hostName: String(b.name ?? ""), hostPlays: !!b.hostPlays, seconds: Number(b.seconds) || 30, quiz: !!b.quiz, count: Number(b.count) || 0 }));
     }
     const code = cleanCode(String(b.code ?? ""));
     if (!code) return NextResponse.json({ error: "Codes look like abc-12d." });

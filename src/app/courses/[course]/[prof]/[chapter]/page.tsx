@@ -7,6 +7,8 @@ import ChapterStudy from "@/components/ChapterStudy";
 import { chapterLabel, usableSections } from "@/lib/types";
 import SplitTopics from "@/components/SplitTopics";
 import ShareButton from "@/components/ShareButton";
+import LiveQuizButton from "@/components/same/LiveQuizButton";
+import { quizPool } from "@/lib/quizpool";
 import Summary from "@/components/Summary";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +38,7 @@ export default async function ChapterPage({
   const author = course.owner_id ? await getProfile(course.owner_id) : null;
   const fun = course.kind === "fun";
   const shown = chapterLabel(chapter);
+  const livePool = quizPool(chapter.content).length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -44,7 +47,10 @@ export default async function ChapterPage({
         <span className="eyebrow mt-4 block">{fun ? `For fun · ${course.title}` : `${course.code} · Chapter ${shown.num}`}</span>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <h1 className="big mt-2 min-w-0">{fun ? chapter.title : shown.title}</h1>
-          <div className="mt-3"><ShareButton title={fun ? `${chapter.title} (${course.title})` : `${course.code} · Ch. ${shown.num} ${shown.title}`} isPrivate={course.visibility === "private"} /></div>
+          <div className="mt-3 flex flex-wrap items-start gap-2">
+            {!chapter.content.same && !chapter.content.math && livePool >= 3 && <LiveQuizButton chapterId={chapter.id} available={livePool} />}
+            <ShareButton title={fun ? `${chapter.title} (${course.title})` : `${course.code} · Ch. ${shown.num} ${shown.title}`} isPrivate={course.visibility === "private"} />
+          </div>
         </div>
         {!fun && teacher && <p className="mt-2 text-[18px] font-bold">{teacher}&apos;s notes</p>}
         <p className="mt-2 text-sm text-muted">

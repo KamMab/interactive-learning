@@ -17,7 +17,7 @@ export default async function PlayRoom({ params }: { params: Promise<{ code: str
   }
   const chapter = chapterId ? await adminGetChapter(chapterId) : null;
   const course = chapter ? await adminGetCourse(chapter.course_id) : null;
-  if (!chapter || !course || !(chapter.content.same || chapter.content.math)) {
+  if (!chapter || !course) {
     return (
       <div className="mx-auto flex max-w-xl flex-col gap-4">
         <p className="fb bad"><strong>No game with the code {code}</strong><br />Check the code with whoever shared it, then try again.</p>
