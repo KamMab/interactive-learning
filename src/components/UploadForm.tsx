@@ -41,6 +41,7 @@ export default function UploadForm({ myCourses, knownCodes, authorName, preset }
   const [idea, setIdea] = useState(""), [picked, setPicked] = useState<Picked[]>([]), [separate, setSeparate] = useState(false), [step, setStep] = useState(""), [pasted, setPasted] = useState("");
   const [extras, setExtras] = useState<Mode[]>([]), [studyIdea, setStudyIdea] = useState(""), [other, setOther] = useState(false);
   const [share, setShare] = useState(true);
+  const [party, setParty] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle"), [msg, setMsg] = useState(""), [copied, setCopied] = useState(false);
 
   const fun = purpose === "fun";
@@ -65,7 +66,7 @@ export default function UploadForm({ myCourses, knownCodes, authorName, preset }
     code: useMine ? "" : code, title: over.title ?? (fun ? title : courseTitle || known?.title || ""), professor,
     number: over.number ?? number, chapterTitle: over.chapterTitle ?? chapterTitle, instructions: focus,
     files: list.map((f) => ({ name: f.name, type: f.type, size: f.size })),
-    extras, studyIdea: other ? studyIdea : "",
+    extras: party ? [] : extras, studyIdea: other && !party ? studyIdea : "", party: how === "build" && party,
   });
 
   async function copy() {
@@ -104,7 +105,7 @@ export default function UploadForm({ myCourses, knownCodes, authorName, preset }
         done.push({ name: f.name, path: slot.path, mime: f.type, size: f.size });
       }
       setPhase("building");
-      const fin = await finishUpload(start.uploadId, done, { extras, studyIdea: other ? studyIdea : "", autoNumber: !fun && !(over.number ?? number) && !numberInTitle(over.chapterTitle ?? chapterTitle) });
+      const fin = await finishUpload(start.uploadId, done, { extras: party ? [] : extras, studyIdea: other && !party ? studyIdea : "", party, autoNumber: !fun && !(over.number ?? number) && !numberInTitle(over.chapterTitle ?? chapterTitle) });
       if ("error" in fin) { setPhase("error"); setMsg((fin.error ?? "Claude couldn't build it.") + (j ? `\n${j} of ${jobs.length} sets were made. See Your chapters.` : "")); return; }
       last = fin.href;
     }
@@ -213,6 +214,16 @@ export default function UploadForm({ myCourses, knownCodes, authorName, preset }
       </fieldset>
 
       <fieldset className="flex flex-col gap-3"><legend className="label">4. Ways to study</legend>
+        {how === "build" && (
+          <button type="button" className={`party-pick${party ? " on" : ""}`} aria-pressed={party} onClick={() => setParty(!party)}>
+            <span className="party-check" aria-hidden>{party ? "✓" : ""}</span>
+            <span className="min-w-0">
+              <b>Make it a live party game: &ldquo;Don&apos;t Say the Same Thing as Me&rdquo;</b>
+              <span>Players name something that fits each prompt without matching the site. Play solo for the leaderboard, or host a live game with a join code for friends or a class.</span>
+            </span>
+          </button>
+        )}
+        {!(how === "build" && party) && <>
         <p className="text-sm text-muted">Every set gets <b className="text-ink">Learn</b>, <b className="text-ink">Flashcards</b> and <b className="text-ink">Quick-fire</b>. Add more if they fit your material{how === "build" ? ", or leave these off and Claude adds what fits" : ""}.</p>
         <div className="flex flex-wrap gap-2">
           {EXTRAS.map((x) => (
@@ -235,6 +246,8 @@ export default function UploadForm({ myCourses, knownCodes, authorName, preset }
               placeholder="e.g. Quiz me on which formula to use for each word problem." />
           </div>
         )}
+        </>}
+        {how === "build" && party && <p className="text-sm text-muted">Say what players should name in the idea box above, e.g. &ldquo;US state capitals&rdquo; or &ldquo;US presidents&rdquo;. Claude writes the prompts from broad to narrow.</p>}
       </fieldset>
 
       <div>

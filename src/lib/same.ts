@@ -10,7 +10,7 @@ export type Verdict = "ok" | "invalid" | "used" | "site" | "twin" | "none";
 export const VERDICT_TEXT: Record<Verdict, string> = {
   ok: "Safe",
   invalid: "Doesn't fit",
-  used: "Already said",
+  used: "Already said for this question",
   site: "Same as the site",
   twin: "Same as another player",
   none: "No answer",
@@ -78,19 +78,20 @@ export const levelFor = (round: number) => (round <= 3 ? 1 : round <= 8 ? 2 : ro
 const left = (p: SamePrompt, used: Set<string>) => p.answers.filter((a) => !used.has(a)).length;
 
 /**
- * The next prompt: the round's level, not asked yet, and still with enough unused answers for everyone
+ * The next prompt: the round's level, not asked yet, and still with enough unused answers for everyone.
+ * Answers only can't repeat within the same question (usedOf(i) = what's been said for prompt i in this game).
  * (players + the site, plus one spare so there's a real choice). Falls back to nearby levels, then to repeats.
  * Returns -1 when nothing is answerable any more (everyone still in has beaten the whole set).
  */
-export function choosePrompt(set: SameSet, round: number, used: Set<string>, asked: Set<number>, players: number, rand: () => number) {
-  if (round === 1) { const f = set.prompts.findIndex((p) => p.first); if (f >= 0 && left(set.prompts[f], used) >= players + 1) return f; }
+export function choosePrompt(set: SameSet, round: number, usedOf: (i: number) => Set<string>, asked: Set<number>, players: number, rand: () => number) {
+  if (round === 1) { const f = set.prompts.findIndex((p) => p.first); if (f >= 0 && left(set.prompts[f], usedOf(f)) >= players + 1) return f; }
   const want = levelFor(round);
   const tiers: ((i: number) => boolean)[] = [
-    (i) => set.prompts[i].level === want && !asked.has(i) && left(set.prompts[i], used) >= players + 2,
-    (i) => Math.abs(set.prompts[i].level - want) <= 1 && !asked.has(i) && left(set.prompts[i], used) >= players + 2,
-    (i) => !asked.has(i) && left(set.prompts[i], used) >= players + 1,
-    (i) => left(set.prompts[i], used) >= players + 2 && set.prompts[i].level >= Math.min(want, 3),
-    (i) => left(set.prompts[i], used) >= players + 1,
+    (i) => set.prompts[i].level === want && !asked.has(i) && left(set.prompts[i], usedOf(i)) >= players + 2,
+    (i) => Math.abs(set.prompts[i].level - want) <= 1 && !asked.has(i) && left(set.prompts[i], usedOf(i)) >= players + 2,
+    (i) => !asked.has(i) && left(set.prompts[i], usedOf(i)) >= players + 1,
+    (i) => left(set.prompts[i], usedOf(i)) >= players + 2 && set.prompts[i].level >= Math.min(want, 3),
+    (i) => left(set.prompts[i], usedOf(i)) >= players + 1,
   ];
   for (const ok of tiers) {
     const pool = set.prompts.map((_, i) => i).filter(ok);
@@ -99,7 +100,7 @@ export function choosePrompt(set: SameSet, round: number, used: Set<string>, ask
   return -1;
 }
 
-/** The site's secret answer: any unused fitting answer, strongly favoring the obvious ones. */
+/** The site's secret answer: any fitting answer not yet said for this question, strongly favoring the obvious ones. */
 export function sitePick(set: SameSet, p: SamePrompt, used: Set<string>, rand: () => number) {
   const w = new Map(set.answers.map((a) => [a.name, a.w ?? 1]));
   const pool = p.answers.filter((a) => !used.has(a));
@@ -133,4 +134,12 @@ export function makeCode() {
 export const cleanCode = (s: string) => {
   const t = s.toLowerCase().replace(/[^a-z0-9]/g, "");
   return t.length === 6 ? `${t.slice(0, 3)}-${t.slice(3)}` : null;
+};
+
+/** What's been said so far, per question: { [prompt index]: answers }. */
+export type SaidLog = Record<string, string[]>;
+export const usedIn = (log: SaidLog, i: number) => new Set(log[String(i)] ?? []);
+export const addSaid = (log: SaidLog, i: number, names: string[]): SaidLog => {
+  const cur = log[String(i)] ?? [];
+  return { ...log, [String(i)]: [...cur, ...names.filter((n, k) => !cur.includes(n) && names.indexOf(n) === k)] };
 };

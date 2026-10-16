@@ -14,7 +14,7 @@ export function Rules({ noun }: { noun: string }) {
     <ul className="same-rules">
       <li><b>1</b>Each round asks you to name a {noun} that fits, like “Name a country in Europe.”</li>
       <li><b>2</b>I secretly pick one too. If you say the same thing as me, you&apos;re out.</li>
-      <li><b>3</b>No repeats: anything already said in the game can&apos;t be used again. Questions get narrower as you go.</li>
+      <li><b>3</b>Questions get narrower as you go. If a question comes up again, answers already said for it don&apos;t count.</li>
     </ul>
   );
 }

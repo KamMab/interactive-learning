@@ -140,7 +140,7 @@ function Live({ code, v, offset, set, act, err, href }: { code: string; v: LiveV
         <span className="eyebrow">Players</span>
         <ul className="room-players">{v.players.map((p) => <li key={p.id} className={`${p.alive ? "" : "out"}${p.id === me?.id ? " me" : ""}`}>{p.name} <b className="mono">{p.streak}</b>{v.status === "answering" && p.alive && p.answered ? " ✓" : ""}</li>)}</ul>
       </section>
-      {v.used.length > 0 && <details className="same-used"><summary>Already said: can&apos;t be used again</summary><p>{[...v.used].sort((a, b) => a.localeCompare(b)).join(" · ")}</p></details>}
+      {v.used.length > 0 && <details className="same-used" open><summary>This question came up before. Already said for it:</summary><p>{[...v.used].sort((a, b) => a.localeCompare(b)).join(" · ")}</p></details>}
     </div>
   );
 }

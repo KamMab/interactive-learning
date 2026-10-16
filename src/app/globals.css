@@ -547,3 +547,9 @@ button.trow.sel{background:var(--ok-soft);border-color:color-mix(in srgb,var(--a
 .sheet.same-sheet{background-image:none;padding:24px}
 .game-col > .sheet.same-home{min-height:0}
 @media (max-width:520px){.sheet.same-sheet{padding:20px 16px}}
+.party-pick{display:flex;gap:14px;align-items:flex-start;text-align:left;padding:16px 18px;border-radius:14px;border:1.5px solid var(--line-strong);background:var(--surface);color:var(--ink)}
+.party-pick b{display:block;font-size:16px;margin-bottom:3px}
+.party-pick span span,.party-pick > span:last-child > span{display:block;font-size:14px;color:var(--muted);line-height:1.45}
+.party-pick.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
+.party-check{flex:none;width:24px;height:24px;border-radius:7px;border:1.5px solid var(--line-strong);display:grid;place-items:center;font-weight:800;color:var(--accent-ink)}
+.party-pick.on .party-check{background:var(--accent);border-color:var(--accent)}

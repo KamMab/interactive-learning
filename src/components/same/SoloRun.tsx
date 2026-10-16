@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Combo from "../Combo";
-import { VERDICT_TEXT, choosePrompt, examples, judgeRound, makeResolver, rng, seedFor, sitePick, type SameSet, type Verdict } from "@/lib/same";
+import { VERDICT_TEXT, addSaid, choosePrompt, examples, judgeRound, makeResolver, rng, seedFor, sitePick, usedIn, type SaidLog, type SameSet, type Verdict } from "@/lib/same";
 
 export type RunEnd = { streak: number; prompt: string; mine: string; site: string; verdict: Verdict; examples: string[] };
 
@@ -10,7 +10,7 @@ export default function SoloRun({ set, seed, onOver, label }: { set: SameSet; se
   const base = useMemo(() => seed ?? Math.floor(Math.random() * 2 ** 31), [seed]);
   const resolve = useMemo(() => makeResolver(set), [set]);
   const names = useMemo(() => set.answers.map((a) => a.name).sort((a, b) => a.localeCompare(b)), [set]);
-  const [used, setUsed] = useState<string[]>([]);
+  const [said, setSaid] = useState<SaidLog>({});
   const [asked, setAsked] = useState<number[]>([]);
   const [round, setRound] = useState(1);
   const [typed, setTyped] = useState("");
@@ -20,9 +20,8 @@ export default function SoloRun({ set, seed, onOver, label }: { set: SameSet; se
 
   // This round's prompt and the site's locked-in answer (both decided before you type).
   const { pi, site } = useMemo(() => {
-    const u = new Set(used);
-    const i = choosePrompt(set, round, u, new Set(asked), 1, rng(seedFor(base, round, 1)));
-    return { pi: i, site: i >= 0 ? sitePick(set, set.prompts[i], u, rng(seedFor(base, round, 2))) : "" };
+    const i = choosePrompt(set, round, (k) => usedIn(said, k), new Set(asked), 1, rng(seedFor(base, round, 1)));
+    return { pi: i, site: i >= 0 ? sitePick(set, set.prompts[i], usedIn(said, i), rng(seedFor(base, round, 2))) : "" };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [round]);
   const p = pi >= 0 ? set.prompts[pi] : null;
@@ -36,16 +35,16 @@ export default function SoloRun({ set, seed, onOver, label }: { set: SameSet; se
     const a = resolve(typed);
     if (!a) { setMsg(typed.trim() ? `We don't know “${typed.trim()}”. Pick a ${set.noun} from the list.` : `Type a ${set.noun}.`); return; }
     setMsg("");
-    const v = judgeRound(p, site, new Set(used), { me: a })["me"];
+    const v = judgeRound(p, site, usedIn(said, pi), { me: a })["me"];
     setReveal({ mine: a, site, verdict: v, read: a.toLowerCase() !== typed.trim().toLowerCase() ? a : null });
   }
   function next() {
     if (!p || !reveal) return;
     if (reveal.verdict !== "ok") {
-      onOver({ streak, prompt: p.text, mine: reveal.mine, site, verdict: reveal.verdict, examples: examples(p, new Set(used), [site, reveal.mine]) });
+      onOver({ streak, prompt: p.text, mine: reveal.mine, site, verdict: reveal.verdict, examples: examples(p, usedIn(said, pi), [site, reveal.mine]) });
       return;
     }
-    setUsed((u) => [...u, site, reveal.mine]);
+    setSaid((l) => addSaid(l, pi, [site, reveal.mine]));
     setAsked((a) => [...a, pi]);
     setRound((r) => r + 1);
     setTyped(""); setReveal(null);
@@ -82,18 +81,15 @@ export default function SoloRun({ set, seed, onOver, label }: { set: SameSet; se
               <strong>{ok ? "Safe!" : VERDICT_TEXT[reveal.verdict]}</strong>
               <p className="mt-1">{ok ? `Different answers, and it fits. Streak: ${streak + 1}.`
                 : reveal.verdict === "site" ? "We said the same thing, so you're out."
-                : reveal.verdict === "used" ? `${reveal.mine} was already said earlier in this game.`
+                : reveal.verdict === "used" ? `${reveal.mine} was already said for this same question earlier in the game.`
                 : `${reveal.mine} doesn't fit “${p.text}”.`}</p>
               <button className="btn mt-3" onClick={next} autoFocus>{ok ? "Next round" : "See results"}</button>
             </div>
           </div>
         )}
       </div>
-      {used.length > 0 && (
-        <details className="same-used">
-          <summary>Already said ({used.length}): can&apos;t be used again</summary>
-          <p>{[...used].sort((a, b) => a.localeCompare(b)).join(" · ")}</p>
-        </details>
+      {!reveal && (said[String(pi)]?.length ?? 0) > 0 && (
+        <p className="same-used">This question came up before. Already said for it (can&apos;t be used again): {[...said[String(pi)]].sort((a, b) => a.localeCompare(b)).join(" · ")}</p>
       )}
     </div>
   );

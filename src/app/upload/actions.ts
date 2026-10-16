@@ -23,6 +23,7 @@ export type UploadMeta = {
   files: { name: string; type: string; size: number }[];
   extras?: Mode[];        // extra ways to study the student picked (Learn, Flashcards and Quick-fire are always on)
   studyIdea?: string;     // "describe another way to study", passed to Claude
+  party?: boolean;        // build a "Don't Say the Same Thing as Me" party game (solo, live with a code, or a challenge)
 };
 
 /** Learn, Flashcards and Quick-fire first, then the extras that fit: the student's picks, or Claude's if they picked none. */
@@ -34,7 +35,15 @@ function finalModes(content: ChapterContent, picked: Mode[] | undefined, suggest
   return [...CORE_MODES.filter(fits), ...extras];
 }
 
+const PARTY_REQUEST = `Build a "Don't Say the Same Thing as Me" party game (fill "same"), NOT a study set: leave terms, questions and entries empty.
+How it plays: each round shows a prompt ("Name a state capital in the South"); players name one answer that fits; the site secretly picks one too and a match is out; an answer already said for a question can't be used if that question comes up again; prompts get narrower as rounds go on.
+- same.noun: what players name, singular (e.g. "state capital", "president").
+- same.answers: EVERY possible answer in the topic, one entry each, with its standard name, "aka" for other ways people type it (nicknames, abbreviations; never an aka two answers share), and "w" 1-5 for how obvious it is (5 = what most people say first).
+- same.prompts: 60-100 prompts across levels 1-5. Level 1 = very broad (15+ answers, e.g. "Name any …"), 2 = broad (10+), 3 = narrower (6-12), 4 = specific (4-8), 5 = narrowest (2-4). Each prompt lists EVERY answer that fits, using names exactly as in same.answers. Mark one broad level-1 prompt "first": true.
+- Accuracy matters more than variety: leave out any prompt whose full answer list you aren't certain of.`;
+
 function studyRequest(meta: UploadMeta) {
+  if (meta.party) return PARTY_REQUEST;
   const extras = (meta.extras ?? []).filter((m) => EXTRA_MODES.includes(m));
   return [
     "Every set is studied with Learn, Flashcards and Quick-fire, so always include terms and multiple-choice questions.",
@@ -202,7 +211,7 @@ export async function importSet(meta: UploadMeta, raw: string) {
 }
 
 /** Step 2: after the files are in storage, have Claude build (or add to) the chapter's study set. */
-export async function finishUpload(uploadId: string, files: { name: string; path: string; mime: string; size: number }[], study: Pick<UploadMeta, "extras" | "studyIdea"> & { autoNumber?: boolean } = {}) {
+export async function finishUpload(uploadId: string, files: { name: string; path: string; mime: string; size: number }[], study: Pick<UploadMeta, "extras" | "studyIdea" | "party"> & { autoNumber?: boolean } = {}) {
   const user = await currentUser();
   if (!user) return { error: "Your sign-in expired. Sign in again and retry." };
   const db = admin();
@@ -220,15 +229,19 @@ export async function finishUpload(uploadId: string, files: { name: string; path
     const [professor, notes] = await Promise.all([adminGetProfessor(chapter.professor_id), adminListNotes(chapter.id)]);
     const hasContent = chapter.content.terms.length + chapter.content.questions.length > 0;
 
-    const extra = studyRequest({ extras: study.extras, studyIdea: study.studyIdea } as UploadMeta);
+    const extra = studyRequest({ extras: study.extras, studyIdea: study.studyIdea, party: study.party } as UploadMeta);
     const result = await generateStudySet({
       course: course as Course, professor, chapter,
       notes: hasContent ? notes.filter((n) => okPaths.some((f) => f.path === n.path)) : notes,
       request: extra + "\n\n" + ((course as Course).kind === "fun"
         ? "This is a for-fun study game a student made. If no notes are attached, build it from accurate general knowledge about the topic in the instructions. Keep it fun but correct. Leave journal entries empty unless the topic is accounting."
         : notes.length ? "This study set is built from a student's own uploaded class notes." : "No notes were attached: build the set from accurate general knowledge of the topic in the instructions, at a college level."),
-      mode: hasContent ? "add" : "replace", allowSettingsChanges: false, chooseModes: true,
+      mode: hasContent && !study.party ? "add" : "replace", allowSettingsChanges: false, chooseModes: true,
     });
+    if (study.party) {
+      if (!result.content.same) return await fail("Claude didn't build the party game. Try again, or describe the topic a bit more.");
+      result.content = { ...result.content, terms: [], questions: [], entries: [], sections: undefined, map: null };
+    }
     const settings = normalizeSettings({ ...(result.settings ?? chapter.settings), modes: finalModes(result.content, study.extras, result.settings?.modes), v: 2 });
     // "Ch. 3" typed by the student + "Chapter 3: Linear Algebra" in the notes -> use the notes' full title.
     const patch: Record<string, unknown> = { content: result.content, settings, published: true, updated_at: new Date().toISOString() };

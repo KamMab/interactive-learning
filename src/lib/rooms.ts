@@ -1,6 +1,6 @@
 import "server-only";
 import { admin } from "./db";
-import { choosePrompt, cleanSame, judgeRound, makeCode, makeResolver, rng, seedFor, sitePick, type SameSet, type Verdict } from "./same";
+import { addSaid, choosePrompt, cleanSame, judgeRound, makeCode, makeResolver, rng, seedFor, sitePick, usedIn, type SaidLog, type SameSet, type Verdict } from "./same";
 
 // Game rooms for "Don't Say the Same Thing as Me". A host gets a code like "ioq-13b".
 // live: everyone answers the same prompt at the same time (Kahoot-style); the server keeps the secret answer.
@@ -13,7 +13,7 @@ export type LiveState = {
   kind: "live"; chapterId: string; title: string; seed: number; seconds: number; host: string; hostName: string;
   status: "lobby" | "answering" | "reveal" | "over";
   players: Player[]; round: number; prompt: number; promptText: string; level: number; site: string; deadline: number;
-  answers: Record<string, { typed: string; answer: string | null }>; used: string[]; asked: number[];
+  answers: Record<string, { typed: string; answer: string | null }>; used: SaidLog; asked: number[]; // used: what was said, per question
   last?: { round: number; prompt: string; site: string; rows: RevealRow[] }; revealUntil?: number; ending?: boolean; winners?: string[];
 };
 export type AsyncState = {
@@ -76,7 +76,7 @@ export async function createRoom(input: { chapterId: string; kind: "live" | "asy
     ? { kind: "async", chapterId: input.chapterId, title, seed, host: input.host, hostName, results: [] }
     : { kind: "live", chapterId: input.chapterId, title, seed, seconds: [15, 20, 30, 45, 60].includes(input.seconds) ? input.seconds : 30,
         host: input.host, hostName, status: "lobby", players: input.hostPlays ? [{ id: input.host, name: hostName, alive: true, streak: 0 }] : [],
-        round: 0, prompt: -1, promptText: "", level: 1, site: "", deadline: 0, answers: {}, used: [], asked: [] };
+        round: 0, prompt: -1, promptText: "", level: 1, site: "", deadline: 0, answers: {}, used: {}, asked: [] };
   for (let i = 0; i < 8; i++) {
     const code = makeCode();
     const { error } = await db().from("game_rooms").insert({ code, chapter_id: input.chapterId, kind: input.kind, state, version: 0 });
@@ -89,16 +89,17 @@ export async function createRoom(input: { chapterId: string; kind: "live" | "asy
 function nextRound(s: LiveState, set: SameSet, now: number) {
   const alive = s.players.filter((p) => p.alive);
   const round = s.round + 1;
-  const used = new Set(s.used);
-  const i = choosePrompt(set, round, used, new Set(s.asked), Math.max(1, alive.length), rng(seedFor(s.seed, round, 1)));
+  const log = s.used && !Array.isArray(s.used) ? s.used : {};
+  const i = choosePrompt(set, round, (k) => usedIn(log, k), new Set(s.asked), Math.max(1, alive.length), rng(seedFor(s.seed, round, 1)));
   if (i < 0) { s.status = "over"; s.winners = alive.map((p) => p.id); return; }
   const p = set.prompts[i];
-  Object.assign(s, { round, prompt: i, promptText: p.text, level: p.level, site: sitePick(set, p, used, rng(seedFor(s.seed, round, 2))),
+  Object.assign(s, { round, prompt: i, promptText: p.text, level: p.level, site: sitePick(set, p, usedIn(log, i), rng(seedFor(s.seed, round, 2))),
     deadline: now + s.seconds * 1000, answers: {}, status: "answering", asked: [...s.asked, i], revealUntil: undefined });
 }
 
 function resolve(s: LiveState, set: SameSet, now: number) {
-  const p = set.prompts[s.prompt], used = new Set(s.used);
+  const log = s.used && !Array.isArray(s.used) ? s.used : {};
+  const p = set.prompts[s.prompt], used = usedIn(log, s.prompt);
   const alive = s.players.filter((x) => x.alive);
   const picks: Record<string, string | null> = Object.fromEntries(alive.map((x) => [x.id, s.answers[x.id]?.answer ?? null]));
   const v = judgeRound(p, s.site, used, picks);
@@ -107,7 +108,7 @@ function resolve(s: LiveState, set: SameSet, now: number) {
     else { x.alive = false; x.outRound = s.round; }
   }
   const newly = new Set([s.site, ...Object.values(picks).filter((a): a is string => !!a && p.answers.includes(a))]);
-  s.used = [...used, ...[...newly].filter((a) => !used.has(a))];
+  s.used = addSaid(log, s.prompt, [...newly]);
   s.last = { round: s.round, prompt: p.text, site: s.site,
     rows: alive.map((x) => ({ id: x.id, name: x.name, typed: s.answers[x.id]?.typed ?? "", answer: picks[x.id], verdict: v[x.id] })) };
   const still = s.players.filter((x) => x.alive);
@@ -144,7 +145,7 @@ function view(s: State, me: string, now: number) {
     kind: s.kind, title: s.title, status: s.status, seconds: s.seconds, hostName: s.hostName, isHost: s.host === me, now,
     round: s.round, promptText: s.promptText, level: s.level, deadline: s.deadline, revealUntil: s.revealUntil ?? 0, ending: !!s.ending,
     players: s.players.map((p) => ({ id: p.id, name: p.name, alive: p.alive, streak: p.streak, answered: !!s.answers[p.id], outRound: p.outRound })),
-    me: meP, myAnswer: s.answers[me]?.typed ?? null, used: s.status === "lobby" ? [] : s.used.slice(-60),
+    me: meP, myAnswer: s.answers[me]?.typed ?? null, used: s.status === "answering" && s.used && !Array.isArray(s.used) ? s.used[String(s.prompt)] ?? [] : [],
     last: s.status === "reveal" || s.status === "over" ? s.last ?? null : null, winners: s.winners ?? [],
   };
 }

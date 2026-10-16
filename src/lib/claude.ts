@@ -5,6 +5,7 @@ import { admin } from "./db";
 import { uid } from "./id";
 import { MAP_NAMES } from "./map-names";
 import { sectionMapper } from "./import-format";
+import { cleanSame } from "./same";
 import {
   MODES,
   TOOLS,
@@ -167,6 +168,16 @@ const studySetTool: Anthropic.Messages.Tool = {
         description: "Which study modes fit this material best, best first (the first one opens when a student picks the set). Only list modes the set has content for.",
         items: { type: "string", enum: [...MODES] },
       },
+      same: {
+        type: "object",
+        description: "Only when asked for a \"Don't Say the Same Thing as Me\" party game: every possible answer plus prompts from broad (level 1) to narrow (level 5), each listing every answer that fits.",
+        properties: {
+          noun: { type: "string", description: "What players name, singular, e.g. 'state capital'" },
+          answers: { type: "array", items: { type: "object", properties: { name: { type: "string" }, aka: { type: "array", items: { type: "string" } }, w: { type: "integer", description: "1-5: how obvious (5 = what most people say first)" } }, required: ["name"] } },
+          prompts: { type: "array", items: { type: "object", properties: { text: { type: "string" }, level: { type: "integer" }, answers: { type: "array", items: { type: "string" }, description: "Every answer that fits, names exactly as in answers" }, first: { type: "boolean" } }, required: ["text", "level", "answers"] } },
+        },
+        required: ["noun", "answers", "prompts"],
+      },
       tools: {
         type: "array",
         description: "Reference material students can open while studying. Use [\"interest-tables\"] when answering needs present/future value factor tables (time value of money, bond pricing, notes, leases, annuities); otherwise [].",
@@ -279,6 +290,7 @@ export async function generateStudySet(input: GenerateInput): Promise<GenerateRe
     labels: out.labels?.front && out.labels?.back ? { front: String(out.labels.front), back: String(out.labels.back) } : undefined,
     map: cleanMap(out.map, sec.of),
     tools: cleanTools(out.tools),
+    same: cleanSame(out.same),
   };
 
   const merged: ChapterContent =
@@ -291,6 +303,7 @@ export async function generateStudySet(input: GenerateInput): Promise<GenerateRe
           entries: [...chapter.content.entries, ...fresh.entries],
           labels: chapter.content.labels ?? fresh.labels,
           tools: cleanTools([...(chapter.content.tools ?? []), ...(fresh.tools ?? [])]),
+          same: fresh.same ?? chapter.content.same,
           map: chapter.content.map && fresh.map && chapter.content.map.region === fresh.map.region
             ? { ...chapter.content.map, items: [...chapter.content.map.items, ...fresh.map.items] }
             : chapter.content.map ?? fresh.map,
