@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { advance, answer, createRoom, join, poll, postResult, start } from "@/lib/rooms";
+import { advance, answer, createRoom, join, poll, postResult, restart, start } from "@/lib/rooms";
 import { cleanCode } from "@/lib/same";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +21,7 @@ export async function POST(req: Request) {
       : b.op === "start" ? await start(code, me)
       : b.op === "answer" ? await answer(code, me, String(b.answer ?? ""))
       : b.op === "next" ? await advance(code, me)
+      : b.op === "restart" ? await restart(code, me)
       : b.op === "result" ? await postResult(code, me, String(b.name ?? ""), Number(b.streak) || 0)
       : { error: "Unknown request." };
     return NextResponse.json(out, { headers: { "Cache-Control": "no-store" } });

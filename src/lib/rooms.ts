@@ -206,6 +206,17 @@ export async function answer(code: string, me: string, typed: string) {
   return "error" in r ? r : { view: view(r.state!, me, Date.now()) };
 }
 
+/** Host: play again with the same code. Everyone stays in the room and is back in the game; new people can join before the start. */
+export async function restart(code: string, me: string) {
+  const r = await mutate(code, (s) => {
+    if (s.kind !== "live" || s.host !== me) return "Only the host can restart.";
+    Object.assign(s, { status: "lobby", seed: Math.floor(Math.random() * 2 ** 31), round: 0, prompt: -1, promptText: "", level: 1, site: "", deadline: 0,
+      answers: {}, used: {}, asked: [], last: undefined, revealUntil: undefined, ending: undefined, winners: undefined });
+    s.players = s.players.map((p) => ({ id: p.id, name: p.name, alive: true, streak: 0 }));
+  });
+  return "error" in r ? r : { view: view(r.state!, me, Date.now()) };
+}
+
 /** Host: skip the reveal pause (or end a round early when everyone's stuck). */
 export async function advance(code: string, me: string) {
   const r = await mutate(code, (s, set) => {

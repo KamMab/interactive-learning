@@ -85,7 +85,9 @@ function Live({ code, v, offset, set, act, err, href }: { code: string; v: LiveV
           <span className="eyebrow">Final standings</span>
           <ol className="same-top mt-2">{ranked.map((p) => <li key={p.id} className={p.id === me?.id ? "me" : ""}><span>{v.winners.includes(p.id) ? "👑 " : ""}{p.name}</span><b className="mono">{p.streak}</b></li>)}</ol>
         </section>
-        <div className="flex flex-wrap gap-3"><Link className="btn" href={href}>{v.isHost ? "Host another game" : "Play again"}</Link><Link className="btn-ghost" href="/games">More games</Link></div>
+        {v.isHost
+          ? <div className="flex flex-wrap gap-3"><button className="btn big" disabled={busy} onClick={async () => { setBusy(true); await act("restart"); setBusy(false); }}>Restart with the same code</button><Link className="btn-ghost big" href={href}>New game</Link></div>
+          : <p className="note">Waiting for {v.hostName} to restart. You&apos;ll be back in automatically, or <Link className="underline" href="/games">find another game</Link>.</p>}
       </div>
     );
   }
@@ -190,8 +192,9 @@ export default function RoomClient({ code, set, chapterId, title, href }: { code
   const act = async (op: string, extra: object = {}) => take(await room({ op, code, ...extra }));
   useEffect(() => { act("poll"); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!v || v.kind !== "live" || v.status === "over") return;
-    const t = setInterval(async () => { const r = await room({ op: "poll", code }); if (r.view) { offset.current = r.view.now - Date.now(); setV(r.view); } }, 1200);
+    if (!v || v.kind !== "live") return;
+    // Slower checks on the results screen, so players see the host's restart.
+    const t = setInterval(async () => { const r = await room({ op: "poll", code }); if (r.view) { offset.current = r.view.now - Date.now(); setV(r.view); } }, v.status === "over" ? 3000 : 1200);
     return () => clearInterval(t);
   }, [v?.kind, (v as LiveView | null)?.status, code]); // eslint-disable-line react-hooks/exhaustive-deps
 
