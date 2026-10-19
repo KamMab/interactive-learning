@@ -575,3 +575,31 @@ button.trow.sel{background:var(--ok-soft);border-color:color-mix(in srgb,var(--a
 .podium .p1{min-height:150px;background:color-mix(in srgb,var(--gold) 30%,var(--surface))}.podium .p2{min-height:115px}.podium .p3{min-height:90px}
 .podium b{font-size:17px}.podium span{font-family:var(--f-mono);font-size:13px;color:var(--muted)}
 .pic-q{max-height:200px;max-width:100%;margin:10px 0 0}
+
+/* ============ Teams in live games ============ */
+.team-c0{--team:#D93A3A}.team-c1{--team:#2F6FD6}.team-c2{--team:#23955A}.team-c3{--team:#D9A400}
+.team-c4{--team:#8A4FD1}.team-c5{--team:#E2731C}.team-c6{--team:#14979A}.team-c7{--team:#D2478C}
+.team-dot{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--team);flex:none;vertical-align:middle}
+.team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.team-card{position:relative;border:1.5px solid var(--line);border-top:5px solid var(--team);border-radius:14px;padding:12px;background:var(--surface-2);display:flex;flex-direction:column;min-width:0}
+.team-card.mine{border-color:var(--team);box-shadow:0 0 0 2px color-mix(in srgb,var(--team) 35%,transparent)}
+.team-name{font-weight:700;background:transparent;border:1px dashed transparent;border-radius:6px;padding:2px 4px;min-width:0;flex:1;color:var(--ink)}
+.team-name:hover,.team-name:focus{border-color:var(--line-strong);outline:none;background:var(--surface)}
+.team-members{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-direction:column;gap:4px;font-size:14.5px}
+.team-members li{display:flex;align-items:center;gap:6px;justify-content:space-between;min-width:0}
+.team-members li.me{font-weight:700}
+.team-members li.empty{color:var(--muted);font-size:13px}
+.team-move{font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);padding:1px 2px;max-width:96px}
+.team-x{position:absolute;top:6px;right:8px;color:var(--muted);font-size:18px;line-height:1}
+.team-x:hover{color:var(--red)}
+.btn-ghost.sm{padding:6px 12px;font-size:13.5px;border-radius:10px}
+.team-board{list-style:none;padding:0;margin:0;display:flex;flex-direction:column}
+.team-board li{display:flex;align-items:center;gap:10px;padding:8px 2px;border-top:1px solid var(--line)}
+.team-board li.me{font-weight:700}
+.team-board .rk{color:var(--muted);font-size:13px;width:18px}
+.team-board .nm{display:flex;flex-direction:column;min-width:0;flex:1}
+.team-board .mvp{font-size:12.5px;color:var(--muted);font-weight:400}
+.team-mvp{padding:10px 12px;border-radius:12px;background:var(--gold-soft);color:var(--ink)}
+.team-tag{display:inline-flex;align-items:center;gap:6px}
+.same-top li span span::before{content:none;margin:0}
+.verdict .team-dot{width:.45em;height:.45em}
