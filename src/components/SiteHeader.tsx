@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AuthButton from "./AuthButton";
 import SearchBar from "./SearchBar";
 import SettingsDialog from "./SettingsDialog";
+import HeaderJoin from "./same/HeaderJoin";
 import { ICON } from "./icons";
 import { applyTheme, startStudyClock } from "@/lib/store";
 
@@ -26,6 +27,7 @@ export default function SiteHeader({ siteName, isAdmin }: { siteName: string; is
           <Link href="/" className="brand" aria-label={`${siteName} library`}>{ICON.book}{siteName}</Link>
           <SearchBar />
           <div className="cover-right">
+            <HeaderJoin />
             <Link href="/upload" className="gear upload">{ICON.upload}<span className="gl">Upload</span></Link>
             {isAdmin && <Link href="/admin" className="gear">{ICON.admin}<span className="gl">Admin</span></Link>}
             <button className="gear" onClick={() => setOpen(true)} aria-label="Settings">{ICON.gear}<span className="gl">Settings</span></button>
