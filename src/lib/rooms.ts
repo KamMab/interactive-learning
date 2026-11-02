@@ -10,7 +10,9 @@ import { addSaid, choosePrompt, cleanSame, judgeRound, makeCode, makeResolver, r
 // async: a challenge. Everyone plays the same seeded game against the site on their own time; best streaks are listed.
 // Rooms advance lazily: every poll checks the clock and moves the game along, so no background job is needed.
 
-export type Player = { id: string; name: string; alive: boolean; streak: number; outRound?: number; score?: number };
+export type Player = { id: string; name: string; alive: boolean; streak: number; outRound?: number; score?: number; team?: string };
+/** Teams for a live game: the host names them, each player joins one. color picks from the team palette in globals.css. */
+export type Team = { id: string; name: string; color: number };
 export type RevealRow = { id: string; name: string; typed: string; answer: string | null; verdict: Verdict; points?: number; secs?: number };
 export type LiveState = {
   kind: "live"; game?: "same" | "math" | "quiz"; chapterId: string; title: string; seed: number; seconds: number; host: string; hostName: string;
@@ -20,6 +22,7 @@ export type LiveState = {
   last?: { round: number; prompt: string; site: string; rows: RevealRow[]; choices?: string[]; counts?: number[]; explanation?: string; image?: string };
   revealUntil?: number; ending?: boolean; winners?: string[];
   order?: number[]; count?: number; q?: { choices: string[]; image?: string }; // quiz: which questions, in what order, and the one on screen
+  teams?: Team[];
 };
 export type AsyncState = {
   kind: "async"; game?: "same" | "math" | "quiz"; chapterId: string; title: string; seed: number; host: string; hostName: string;
@@ -30,6 +33,42 @@ type State = LiveState | AsyncState;
 // (Tests can swap in a stand-in database through globalThis.__roomsDb.)
 const db = () => ((globalThis as { __roomsDb?: ReturnType<typeof admin> }).__roomsDb ?? admin());
 const MAX_PLAYERS = 100;
+const MAX_TEAMS = 8;
+export const TEAM_NAMES = ["Red", "Blue", "Green", "Gold", "Purple", "Orange", "Teal", "Pink"];
+
+/** n default teams named by color, skipping colors already used. */
+function defaultTeams(n: number, keep: Team[] = []): Team[] {
+  const out = [...keep];
+  for (let c = 0; out.length < n && c < TEAM_NAMES.length; c++) {
+    if (out.some((t) => t.color === c)) continue;
+    out.push({ id: "t" + Math.random().toString(36).slice(2, 8), name: `${TEAM_NAMES[c]} team`, color: c });
+  }
+  return out;
+}
+
+/** Players without a team go to the smallest team (ties: the first listed), so nobody plays unassigned. */
+function fillTeams(s: LiveState) {
+  if (!s.teams?.length) return;
+  const ids = new Set(s.teams.map((t) => t.id));
+  for (const p of s.players) {
+    if (p.team && ids.has(p.team)) continue;
+    const size = (id: string) => s.players.filter((x) => x.team === id).length;
+    p.team = [...s.teams].sort((a, b) => size(a.id) - size(b.id))[0].id;
+  }
+}
+
+/** Team totals for the board: quiz points (or streaks in the knockout games), plus who earned the most on each team. */
+function teamBoard(s: LiveState) {
+  if (!s.teams?.length) return [];
+  const pts = (p: Player) => (s.game === "quiz" ? p.score ?? 0 : p.streak);
+  return s.teams.map((t) => {
+    const members = s.players.filter((p) => p.team === t.id);
+    const score = members.reduce((n, p) => n + pts(p), 0);
+    const best = [...members].sort((a, b) => pts(b) - pts(a))[0];
+    return { id: t.id, name: t.name, color: t.color, score, members: members.map((p) => p.id),
+      mvp: best && pts(best) > 0 ? { id: best.id, name: best.name, points: pts(best), share: score ? Math.round((100 * pts(best)) / score) : 0 } : null };
+  });
+}
 const REVEAL_MS = 7000;
 type Game = { set?: SameSet; math?: MathSpec; pool?: QuizQ[] };
 const sets = new Map<string, { at: number; title: string } & Game>();
@@ -77,7 +116,7 @@ async function mutate(code: string, fn: (s: State, g: Game) => string | void) {
   return { error: "The game is busy. Try again." };
 }
 
-export async function createRoom(input: { chapterId: string; kind: "live" | "async"; host: string; hostName: string; hostPlays: boolean; seconds: number; quiz?: boolean; count?: number }) {
+export async function createRoom(input: { chapterId: string; kind: "live" | "async"; host: string; hostName: string; hostPlays: boolean; seconds: number; quiz?: boolean; count?: number; teams?: number }) {
   const { title, set, math, pool } = await loadSet(input.chapterId);
   const game = input.quiz || (!set && !math) ? "quiz" as const : set ? "same" as const : "math" as const;
   if (game === "quiz" && !pool?.length) return { error: "This chapter has no questions for a live quiz yet." };
@@ -89,7 +128,8 @@ export async function createRoom(input: { chapterId: string; kind: "live" | "asy
     : { kind: "live", game, chapterId: input.chapterId, title, seed, seconds: [10, 15, 20, 30, 45, 60].includes(input.seconds) ? input.seconds : 30,
         host: input.host, hostName, status: "lobby", players: input.hostPlays ? [{ id: input.host, name: hostName, alive: true, streak: 0 }] : [],
         round: 0, prompt: -1, promptText: "", level: 1, site: "", deadline: 0, answers: {}, used: {}, asked: [],
-        ...(game === "quiz" ? { count: input.count && input.count > 0 ? Math.min(pool!.length, Math.floor(input.count)) : pool!.length } : {}) };
+        ...(game === "quiz" ? { count: input.count && input.count > 0 ? Math.min(pool!.length, Math.floor(input.count)) : pool!.length } : {}),
+        ...(input.teams && input.teams >= 2 ? { teams: defaultTeams(Math.min(MAX_TEAMS, Math.floor(input.teams))) } : {}) };
   for (let i = 0; i < 8; i++) {
     const code = makeCode();
     const { error } = await db().from("game_rooms").insert({ code, chapter_id: input.chapterId, kind: input.kind, state, version: 0 });
@@ -223,7 +263,8 @@ function view(s: State, me: string, now: number) {
   return {
     kind: s.kind, game: s.game ?? "same", title: s.title, status: s.status, seconds: s.seconds, hostName: s.hostName, isHost: s.host === me, now,
     round: s.round, promptText: s.promptText, level: s.level, deadline: s.deadline, revealUntil: s.revealUntil ?? 0, ending: !!s.ending,
-    players: s.players.map((p) => ({ id: p.id, name: p.name, alive: p.alive, streak: p.streak, score: p.score ?? 0, answered: !!s.answers[p.id], outRound: p.outRound })),
+    players: s.players.map((p) => ({ id: p.id, name: p.name, alive: p.alive, streak: p.streak, score: p.score ?? 0, answered: !!s.answers[p.id], outRound: p.outRound, team: p.team ?? null })),
+    teams: teamBoard(s),
     count: s.order?.length ?? s.count ?? 0, question: s.game === "quiz" && s.status === "answering" ? questionOf(s) : null,
     me: meP, myAnswer: s.answers[me]?.typed ?? null, used: s.status === "answering" && s.used && !Array.isArray(s.used) ? s.used[String(s.prompt)] ?? [] : [],
     last: s.status === "reveal" || s.status === "over" ? s.last ?? null : null, winners: s.winners ?? [],
@@ -267,6 +308,7 @@ export async function start(code: string, me: string) {
     if (s.host !== me) return "Only the host can start.";
     if (s.status !== "lobby") return;
     if (!s.players.length) return "Wait for at least one player to join.";
+    fillTeams(s);
     nextRound(s, g, Date.now());
   });
   return "error" in r ? r : { view: view(r.state!, me, Date.now()) };
@@ -301,7 +343,43 @@ export async function restart(code: string, me: string) {
     if (s.kind !== "live" || s.host !== me) return "Only the host can restart.";
     Object.assign(s, { status: "lobby", seed: Math.floor(Math.random() * 2 ** 31), round: 0, prompt: -1, promptText: "", level: 1, site: "", deadline: 0,
       answers: {}, used: {}, asked: [], last: undefined, revealUntil: undefined, ending: undefined, winners: undefined, order: undefined });
-    s.players = s.players.map((p) => ({ id: p.id, name: p.name, alive: true, streak: 0, score: 0 }));
+    s.players = s.players.map((p) => ({ id: p.id, name: p.name, alive: true, streak: 0, score: 0, ...(p.team ? { team: p.team } : {}) }));
+  });
+  return "error" in r ? r : { view: view(r.state!, me, Date.now()) };
+}
+
+/**
+ * Host: set up teams before the game. names: one per team (2-8); an empty list turns teams off.
+ * Teams keep their ids (and their players) when renamed; players on a removed team go back to unassigned.
+ */
+export async function setTeams(code: string, me: string, names: unknown) {
+  const r = await mutate(code, (s) => {
+    if (s.kind !== "live" || s.host !== me) return "Only the host can set up teams.";
+    if (s.status !== "lobby") return "Teams can only be changed before the game starts.";
+    const list = (Array.isArray(names) ? names : []).map((n) => String(n ?? "").trim().replace(/\s+/g, " ").slice(0, 24)).slice(0, MAX_TEAMS);
+    if (!list.length) { s.teams = undefined; s.players.forEach((p) => delete p.team); return; }
+    if (list.length < 2) return "Make at least two teams.";
+    const next = defaultTeams(list.length, (s.teams ?? []).slice(0, list.length)).map((t, i) => ({ ...t, name: list[i] || t.name }));
+    if (new Set(next.map((t) => t.name.toLowerCase())).size !== next.length) return "Give each team a different name.";
+    s.teams = next;
+    const ids = new Set(s.teams.map((t) => t.id));
+    s.players.forEach((p) => { if (p.team && !ids.has(p.team)) delete p.team; });
+  });
+  return "error" in r ? r : { view: view(r.state!, me, Date.now()) };
+}
+
+/** A player picks their one team (picking another moves them). The host can also move anyone (who). Before the game only. */
+export async function pickTeam(code: string, me: string, team: string, who?: string) {
+  const r = await mutate(code, (s) => {
+    if (s.kind !== "live" || !s.teams?.length) return "This game isn't using teams.";
+    if (s.status !== "lobby") return "Teams are locked once the game starts.";
+    const target = who && who !== me ? who : me;
+    if (target !== me && s.host !== me) return "Only the host can move other players.";
+    const p = s.players.find((x) => x.id === target);
+    if (!p) return target === me ? "Join the game first, then pick a team." : "That player left.";
+    if (!team) { delete p.team; return; }
+    if (!s.teams.some((t) => t.id === team)) return "That team doesn't exist anymore.";
+    p.team = team;
   });
   return "error" in r ? r : { view: view(r.state!, me, Date.now()) };
 }

@@ -7,6 +7,7 @@ import MathRun from "./MathRun";
 import { MathRules } from "./MathGame";
 import Pic from "../Pic";
 import JoinBox from "./JoinBox";
+import { TeamDot, TeamStandings, TeamsLobby, teamOf } from "./Teams";
 import { Rules, RunOver, StreakBoard } from "./SameGame";
 import { room, saveName, savedName } from "./player";
 import { saveStreak } from "@/app/play/actions";
@@ -39,6 +40,12 @@ function NameForm({ label, onName, busy }: { label: string; onName: (n: string) 
   );
 }
 
+/** A player's name with their team's color dot (when the game uses teams). */
+function Who({ v, id, name }: { v: LiveView; id: string; name: string }) {
+  const t = teamOf(v, id);
+  return t ? <span className="team-tag"><TeamDot color={t.color} />{name}</span> : <>{name}</>;
+}
+
 function Countdown({ until, offset }: { until: number; offset: number }) {
   const [, tick] = useState(0);
   useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 250); return () => clearInterval(t); }, []);
@@ -61,12 +68,13 @@ function Live({ code, v, offset, set, act, err, href }: { code: string; v: LiveV
         {v.isHost && <Code code={code} />}
         {!joined && !v.isHost && <NameForm label="Join the game" busy={busy} onName={async (n) => { setBusy(true); await act("join", { name: n }); setBusy(false); }} />}
         {joined && !v.isHost && <p className="fb"><strong>You&apos;re in, {me!.name}!</strong><br />Waiting for {v.hostName} to start the game.</p>}
+        <TeamsLobby v={v} act={act} />
         <section className="card p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="eyebrow">{v.players.length} player{v.players.length === 1 ? "" : "s"}</span>
             {v.isHost && <button className="btn" disabled={!v.players.length || busy} onClick={async () => { setBusy(true); await act("start"); setBusy(false); }}>Start the game</button>}
           </div>
-          <ul className="room-players">{v.players.map((p) => <li key={p.id} className={p.id === me?.id ? "me" : ""}>{p.name}</li>)}</ul>
+          <ul className="room-players">{v.players.map((p) => <li key={p.id} className={p.id === me?.id ? "me" : ""}><Who v={v} id={p.id} name={p.name} /></li>)}</ul>
           {!v.players.length && <p className="note">Players show up here as they join.</p>}
         </section>
         <section className="card p-5"><span className="eyebrow">Live rules</span>{math || !set ? <><MathRules /><p className="note mt-2">Everyone gets the same problem at once. Last one standing wins.</p></> : <><Rules noun={set.noun} /><p className="note mt-2">Live games add one more rule: if you say the same thing as another player, you&apos;re both out. Last one standing wins.</p></>}</section>
@@ -79,6 +87,7 @@ function Live({ code, v, offset, set, act, err, href }: { code: string; v: LiveV
     const winners = v.players.filter((p) => v.winners.includes(p.id));
     return (
       <div className="flex flex-col gap-4">
+        <TeamStandings v={v} final unit="right answers" />
         <section className="card p-6 enter">
           <span className="eyebrow">Game over · {v.round} rounds</span>
           <p className="verdict">{winners.length === 1 ? `${winners[0].name} wins!` : winners.length > 1 ? `Tie: ${winners.map((w) => w.name).join(" & ")}` : "Game over"}</p>
@@ -87,7 +96,7 @@ function Live({ code, v, offset, set, act, err, href }: { code: string; v: LiveV
         </section>
         <section className="card p-5">
           <span className="eyebrow">Final standings</span>
-          <ol className="same-top mt-2">{ranked.map((p) => <li key={p.id} className={p.id === me?.id ? "me" : ""}><span>{v.winners.includes(p.id) ? "👑 " : ""}{p.name}</span><b className="mono">{p.streak}</b></li>)}</ol>
+          <ol className="same-top mt-2">{ranked.map((p) => <li key={p.id} className={p.id === me?.id ? "me" : ""}><span>{v.winners.includes(p.id) ? "👑 " : ""}<Who v={v} id={p.id} name={p.name} /></span><b className="mono">{p.streak}</b></li>)}</ol>
         </section>
         {v.isHost
           ? <div className="flex flex-wrap gap-3"><button className="btn big" disabled={busy} onClick={async () => { setBusy(true); await act("restart"); setBusy(false); }}>Restart with the same code</button><Link className="btn-ghost big" href={href}>New game</Link></div>
@@ -145,7 +154,7 @@ function Live({ code, v, offset, set, act, err, href }: { code: string; v: LiveV
       </section>
       <section className="card p-5">
         <span className="eyebrow">Players</span>
-        <ul className="room-players">{v.players.map((p) => <li key={p.id} className={`${p.alive ? "" : "out"}${p.id === me?.id ? " me" : ""}`}>{p.name} <b className="mono">{p.streak}</b>{v.status === "answering" && p.alive && p.answered ? " ✓" : ""}</li>)}</ul>
+        <ul className="room-players">{v.players.map((p) => <li key={p.id} className={`${p.alive ? "" : "out"}${p.id === me?.id ? " me" : ""}`}><Who v={v} id={p.id} name={p.name} /> <b className="mono">{p.streak}</b>{v.status === "answering" && p.alive && p.answered ? " ✓" : ""}</li>)}</ul>
       </section>
       {v.used.length > 0 && <details className="same-used" open><summary>This question came up before. Already said for it:</summary><p>{[...v.used].sort((a, b) => a.localeCompare(b)).join(" · ")}</p></details>}
     </div>
@@ -157,7 +166,7 @@ function QuizLive({ code, v, offset, act, err, href }: { code: string; v: LiveVi
   const me = v.me;
   const ranked = [...v.players].sort((a, b) => b.score - a.score);
   const board = (n = 5) => (
-    <ol className="same-top mt-2">{ranked.slice(0, n).map((p) => <li key={p.id} className={p.id === me?.id ? "me" : ""}><span>{p.name}</span><b className="mono">{p.score.toLocaleString()}</b></li>)}</ol>
+    <ol className="same-top mt-2">{ranked.slice(0, n).map((p) => <li key={p.id} className={p.id === me?.id ? "me" : ""}><span><Who v={v} id={p.id} name={p.name} /></span><b className="mono">{p.score.toLocaleString()}</b></li>)}</ol>
   );
   if (v.status === "lobby") {
     return (
@@ -165,15 +174,16 @@ function QuizLive({ code, v, offset, act, err, href }: { code: string; v: LiveVi
         {v.isHost && <Code code={code} />}
         {!me && !v.isHost && <NameForm label="Join the game" busy={busy} onName={async (n) => { setBusy(true); await act("join", { name: n }); setBusy(false); }} />}
         {me && !v.isHost && <p className="fb"><strong>You&apos;re in, {me.name}!</strong><br />Waiting for {v.hostName} to start. Watch the screen and tap fast!</p>}
+        <TeamsLobby v={v} act={act} />
         <section className="card p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="eyebrow">{v.players.length} player{v.players.length === 1 ? "" : "s"} · {v.count} questions · {v.seconds}s each</span>
             {v.isHost && <button className="btn" disabled={!v.players.length || busy} onClick={async () => { setBusy(true); await act("start"); setBusy(false); }}>Start the quiz</button>}
           </div>
-          <ul className="room-players">{v.players.map((p) => <li key={p.id} className={p.id === me?.id ? "me" : ""}>{p.name}</li>)}</ul>
+          <ul className="room-players">{v.players.map((p) => <li key={p.id} className={p.id === me?.id ? "me" : ""}><Who v={v} id={p.id} name={p.name} /></li>)}</ul>
           {!v.players.length && <p className="note">Players show up here as they join.</p>}
         </section>
-        <section className="card p-5"><span className="eyebrow">How scoring works</span><p className="mt-2">Everyone sees the same question at once. A right answer is worth up to <b>1,000 points</b>: the faster you answer, the more you get (at least 250). Wrong answers get 0, and nobody is knocked out. Most points after the last question wins.</p></section>
+        <section className="card p-5"><span className="eyebrow">How scoring works</span><p className="mt-2">Everyone sees the same question at once. A right answer is worth up to <b>1,000 points</b>: the faster you answer, the more you get (at least 250). Wrong answers get 0, and nobody is knocked out. Most points after the last question wins.{v.teams.length > 0 && <> In teams, every point you score adds to your team&apos;s total; the top team wins, and the board shows who scored the most for each team.</>}</p></section>
       </div>
     );
   }
@@ -181,8 +191,9 @@ function QuizLive({ code, v, offset, act, err, href }: { code: string; v: LiveVi
     const top = ranked.slice(0, 3);
     return (
       <div className="flex flex-col gap-4">
+        <TeamStandings v={v} final unit="points" />
         <section className="card p-6 enter">
-          <span className="eyebrow">Final results · {v.count} questions</span>
+          <span className="eyebrow">{v.teams.length ? "Top players" : "Final results"} · {v.count} questions</span>
           <p className="verdict">{top[0] && top[0].score > 0 ? `${top[0].name} wins!` : "Game over"}</p>
           <div className="podium">{[1, 0, 2].map((k) => top[k] ? <div key={k} className={`p${k + 1}`}><span>{k === 0 ? "👑 1st" : k === 1 ? "2nd" : "3rd"}</span><b>{top[k].name}</b><span>{top[k].score.toLocaleString()}</span></div> : <div key={k} className={`p${k + 1}`} style={{ visibility: "hidden" }} />)}</div>
           {me && <p className="mt-4 text-muted">You finished #{ranked.findIndex((p) => p.id === me.id) + 1} with {me.score?.toLocaleString?.() ?? 0} points ({me.streak} right).</p>}
@@ -202,6 +213,7 @@ function QuizLive({ code, v, offset, act, err, href }: { code: string; v: LiveVi
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <span className="mono mr-auto text-[13px] text-muted">Question {v.round} of {v.count} · code {code}</span>
+        {teamOf(v, me?.id) && <span className="pill team-tag"><TeamDot color={teamOf(v, me?.id)!.color} />{teamOf(v, me?.id)!.name}</span>}
         {me && <span className="pill"><b>{(me.score ?? 0).toLocaleString()}</b> pts</span>}
         {v.status === "answering" ? <Countdown until={v.deadline} offset={offset} /> : <Countdown until={v.revealUntil} offset={offset} />}
       </div>
@@ -232,6 +244,7 @@ function QuizLive({ code, v, offset, act, err, href }: { code: string; v: LiveVi
             {myRow && <p className={`fb mt-3${myRow.verdict === "ok" ? "" : " bad"}`}><strong className="quiz-pts">{myRow.verdict === "ok" ? `+${myRow.points}` : myRow.verdict === "none" ? "Too slow" : "Not this time"}</strong><br />{myRow.verdict === "ok" ? `Answered in ${myRow.secs?.toFixed(1) ?? "?"}s. Faster = more points.` : "0 points this round."}</p>}
             {last.explanation && <p className="note mt-2">{last.explanation}</p>}
             <div className="mt-4"><span className="eyebrow">Top {Math.min(5, ranked.length)}</span>{board(5)}</div>
+            <TeamStandings v={v} unit="pts" />
             <p className="note mt-2">{v.ending ? "That was the last question!" : "Next question in a moment."}</p>
           </>
         )}

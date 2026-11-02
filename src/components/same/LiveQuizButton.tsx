@@ -12,12 +12,13 @@ export default function LiveQuizButton({ chapterId, available }: { chapterId: st
   const [seconds, setSeconds] = useState(20);
   const [name, setName] = useState(savedName());
   const [plays, setPlays] = useState(false);
+  const [teams, setTeams] = useState(0);
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
   async function go(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) { setErr("Add your name so players know whose game it is."); return; }
     setBusy(true); setErr(""); saveName(name.trim());
-    const r = await room<{ code?: string }>({ op: "create", chapterId, kind: "live", quiz: true, count, seconds, name, hostPlays: plays });
+    const r = await room<{ code?: string }>({ op: "create", chapterId, kind: "live", quiz: true, count, seconds, name, hostPlays: plays, teams });
     if (r.error || !r.code) { setErr(r.error ?? "Couldn't start the game."); setBusy(false); return; }
     router.push(`/play/${r.code}`);
   }
@@ -36,6 +37,10 @@ export default function LiveQuizButton({ chapterId, available }: { chapterId: st
           <div className="flex flex-wrap items-center gap-2"><span className="note">Time per question</span>
             {[10, 20, 30, 60].map((s) => <button key={s} type="button" className="chip sm" aria-pressed={seconds === s} onClick={() => setSeconds(s)}>{s}s</button>)}
           </div>
+          <div className="flex flex-wrap items-center gap-2"><span className="note">Teams</span>
+            {[0, 2, 3, 4].map((n) => <button key={n} type="button" className="chip sm" aria-pressed={teams === n} onClick={() => setTeams(n)}>{n ? `${n} teams` : "Off"}</button>)}
+          </div>
+          {teams > 0 && <p className="note -mt-2">Players pick their team when they join. You can rename teams, add more, or move people before you start.</p>}
           <label className="flex flex-col gap-1 text-sm font-bold">Your name<input className="input max-w-xs" value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder="e.g. Ms. Rivera" /></label>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={plays} onChange={(e) => setPlays(e.target.checked)} /> I&apos;m playing too (leave off to run it on a projector)</label>
           {err && <p className="text-sm text-bad">{err}</p>}
