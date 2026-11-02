@@ -605,8 +605,6 @@ button.trow.sel{background:var(--ok-soft);border-color:color-mix(in srgb,var(--a
 .verdict .team-dot{width:.45em;height:.45em}
 
 .hjoin{position:relative}
-.gear.join{background:var(--header-ink);border-color:var(--header-ink);color:var(--brand-ink)}
-.gear.join:hover{filter:brightness(1.05)}
 .hjoin-pop{position:absolute;right:0;top:calc(100% + 10px);z-index:50;width:min(320px,calc(100vw - 32px));display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:14px;background:var(--surface);border:1px solid var(--line-strong);box-shadow:0 14px 40px rgba(4,22,40,.25);color:var(--ink)}
 .hjoin-in{flex:1;min-width:0;font-size:18px;letter-spacing:.08em;text-align:center;text-transform:lowercase}
 @media (max-width:560px){.hjoin-pop{right:-110px}}
